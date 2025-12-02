@@ -1,0 +1,181 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <RootNamespace>Celeste.Mod.UltimateMadelineCeleste</RootNamespace>
+        <LangVersion>latest</LangVersion>
+        <CelestePrefix Condition="'$(CelestePrefix)' == '' And Exists('..\..\..\Celeste.dll')">..\..\..</CelestePrefix>
+        <CelestePrefix Condition="'$(CelestePrefix)' == ''">lib-stripped</CelestePrefix>
+        <ZippedFiles>..\everest.yaml;..\bin\**\*.*;..\Audio\**\*.*;..\Dialog\**\*.*;..\Graphics\**\*.*;..\Ahorn\**\*.*;..\Loenn\**\*.*</ZippedFiles>
+        <PackageId>UltimateMadelineCeleste</PackageId>
+    </PropertyGroup>
+
+    <!--Disable "Copy Local" for all references-->
+    <ItemDefinitionGroup>
+        <PackageReference PrivateAssets="all" ExcludeAssets="runtime" />
+        <Reference Private="false" />
+    </ItemDefinitionGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MonoMod.RuntimeDetour" Version="*" PrivateAssets="all" ExcludeAssets="runtime" />
+        <PackageReference Include="Mono.Cecil" Version="*" />
+        <PackageReference Include="CelesteAnalyzer" Version="*" />
+        <PackageReference Include="MonoMod.Utils" Version="25.0.11" />
+        <PackageReference Include="YamlDotNet" Version="*" />
+        <PackageReference Include="Steamworks.NET" Version="20.1.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="$(NuGetPackageRoot)bepinex.assemblypublicizer.msbuild\**\IgnoresAccessChecksToAttribute.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="CelesteMod.Publicizer" Version="*" CelesteAssembly="$(CelestePrefix)\Celeste.dll" />
+        <Reference Include="$(CelestePrefix)\MMHOOK_Celeste.dll" Private="false" />
+    </ItemGroup>
+
+    <!-- CelesteNet references -->
+    <PropertyGroup>
+        <CelesteNetZip>$(CelestePrefix)\Mods\CelesteNet.Client.zip</CelesteNetZip>
+        <CelesteNetLibDir>lib\CelesteNet</CelesteNetLibDir>
+    </PropertyGroup>
+    
+    <ItemGroup>
+        <Reference Include="$(CelesteNetLibDir)\CelesteNet.Client.dll" Private="false" />
+        <Reference Include="$(CelesteNetLibDir)\CelesteNet.Shared.dll" Private="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="*" PrivateAssets="all" />
+        <Reference Include="$(CelestePrefix)\FNA.dll" Publicize="true" />
+    </ItemGroup>
+
+    <Target Name="CopyFiles" AfterTargets="Build" Inputs="$(OutputPath)\$(AssemblyName).dll;$(OutputPath)\$(AssemblyName).pdb" Outputs="..\bin\$(AssemblyName).dll;..\bin\$(AssemblyName).pdb">
+        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="..\bin" />
+        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).pdb" DestinationFolder="..\bin" />
+    </Target>
+    
+    <Target Name="DeployToMods" AfterTargets="CopyFiles" Inputs="$(ZippedFiles)" Outputs="$(CelestePrefix)\Mods\UltimateMadelineCeleste">
+        <ItemGroup>
+            <MapFiles Include="..\Maps\**\*.*" />
+        </ItemGroup>
+        <ItemGroup>
+            <GraphicsFiles Include="..\Graphics\**\*.*" />
+        </ItemGroup>
+        <Copy SourceFiles="..\everest.yaml" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste" />
+        <Copy SourceFiles="..\bin\UltimateMadelineCeleste.dll" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste\bin" />
+        <Copy SourceFiles="..\bin\UltimateMadelineCeleste.pdb" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste\bin" />
+        <Copy SourceFiles="@(MapFiles)" DestinationFiles="@(MapFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Maps\%(RecursiveDir)%(Filename)%(Extension)')" />
+        <Copy SourceFiles="@(GraphicsFiles)" DestinationFiles="@(GraphicsFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Graphics\%(RecursiveDir)%(Filename)%(Extension)')" />
+    </Target>
+
+    <Target Name="PackageMod" AfterTargets="CopyFiles" Inputs="$(ZippedFiles)" Outputs="..\UltimateMadelineCeleste.zip" Condition="'$(Configuration)' == 'Release'">
+        <ItemGroup>
+            <FilesToPackage Include="$(ZippedFiles)" />
+        </ItemGroup>
+        <PackageMod Files="@(FilesToPackage)" OutputPath="..\UltimateMadelineCeleste.zip" />
+    </Target>
+    
+    <PropertyGroup>
+        <PathMap>$(MSBuildProjectDirectory)=UltimateMadelineCeleste/</PathMap>
+    </PropertyGroup>
+
+    <!-- Extract CelesteNet DLLs from zip before build -->
+    <Target Name="ExtractCelesteNet" BeforeTargets="ResolveAssemblyReferences" Condition="Exists('$(CelesteNetZip)')">
+        <MakeDir Directories="$(CelesteNetLibDir)" />
+        <ExtractFromZip ZipPath="$(CelesteNetZip)" FilesToExtract="CelesteNet.Client.dll;CelesteNet.Shared.dll" OutputDir="$(CelesteNetLibDir)" />
+    </Target>
+
+    <!-- Inline task to extract specific files from a zip -->
+    <UsingTask TaskName="ExtractFromZip"
+               TaskFactory="RoslynCodeTaskFactory"
+               AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <ZipPath ParameterType="System.String" Required="true" />
+            <FilesToExtract ParameterType="System.String" Required="true" />
+            <OutputDir ParameterType="System.String" Required="true" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.IO.Compression" />
+            <Code Type="Fragment" Language="cs">
+            <![CDATA[
+                var filesToExtract = new HashSet<string>(FilesToExtract.Split(';'), StringComparer.OrdinalIgnoreCase);
+                
+                using (ZipArchive zip = ZipFile.OpenRead(ZipPath))
+                {
+                    foreach (var entry in zip.Entries)
+                    {
+                        var fileName = Path.GetFileName(entry.FullName);
+                        if (filesToExtract.Contains(fileName))
+                        {
+                            var destPath = Path.Combine(OutputDir, fileName);
+                            if (!File.Exists(destPath) || new FileInfo(destPath).Length != entry.Length)
+                            {
+                                entry.ExtractToFile(destPath, overwrite: true);
+                                Log.LogMessage(MessageImportance.High, $"Extracted {fileName} from {ZipPath}");
+                            }
+                        }
+                    }
+                }
+            ]]>
+            </Code>
+        </Task>
+    </UsingTask>
+
+    <!-- Inline task used to create a .zip for the mod -->
+    <UsingTask TaskName="PackageMod"
+               TaskFactory="RoslynCodeTaskFactory"
+               AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll" >
+        <ParameterGroup>
+            <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+            <OutputPath ParameterType="System.String" Required="true" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.IO.Compression" />
+            <Code Type="Fragment" Language="cs">
+            <![CDATA[
+                var projectDir = Path.Combine(@"$(ProjectDir)", ".."); // Go one level up, since we're inside the 'Source' directory
+                projectDir = Uri.UnescapeDataString(projectDir);
+            
+                if (File.Exists(OutputPath))
+                    File.Delete(OutputPath);
+
+                using (ZipArchive zip = ZipFile.Open(OutputPath, ZipArchiveMode.Create))
+                {
+                    foreach (var file in Files)
+                    {
+                        string filePath = file.GetMetadata("FullPath");
+                        string entryName = GetRelativePath(projectDir, filePath);
+                        
+                        zip.CreateEntryFromFile(filePath, entryName);
+                    }
+                }
+    
+                string GetRelativePath(string fromPath, string toPath)
+                {
+                    if (string.IsNullOrEmpty(fromPath)) throw new ArgumentNullException(nameof(fromPath));
+                    if (string.IsNullOrEmpty(toPath))   throw new ArgumentNullException(nameof(toPath));
+                
+                    Uri fromUri = new Uri(fromPath);
+                    Uri toUri = new Uri(toPath);
+                
+                    if (fromUri.Scheme != toUri.Scheme) { return toPath; } // path can't be made relative.
+                
+                    Uri relativeUri = fromUri.MakeRelativeUri(toUri);
+                    string relativePath = Uri.UnescapeDataString(relativeUri.ToString());
+                
+                    if (toUri.Scheme.Equals("file", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        relativePath = relativePath.Replace(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    }
+                
+                    return relativePath;
+                }
+            ]]>
+            </Code>
+        </Task>
+    </UsingTask>
+
+</Project>

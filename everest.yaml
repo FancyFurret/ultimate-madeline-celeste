@@ -1,0 +1,13 @@
+- Name: UltimateMadelineCeleste
+  Version: 1.0
+  DLL: bin/UltimateMadelineCeleste.dll
+  Dependencies:
+    - Name: EverestCore
+      Version: 1.4673.0
+    - Name: ExtendedCameraDynamics
+      Version: 1.1.2
+  OptionalDependencies:
+    - Name: SpeedrunTool
+      Version: 3.22.0
+    - Name: GravityHelper
+      Version: 1.2.0
