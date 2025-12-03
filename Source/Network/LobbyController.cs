@@ -195,8 +195,7 @@ public class LobbyController
 
             if (player == null) continue;
 
-            if (!string.IsNullOrEmpty(playerInfo.Graphics?.SkinId))
-                players.SetPlayerSkin(player, playerInfo.Graphics.SkinId);
+            players.SetPlayerSkin(player, playerInfo.Graphics?.SkinId);
 
             // Apply additional graphics if provided
             if (!isLocal && playerInfo.Graphics != null)

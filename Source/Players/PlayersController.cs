@@ -324,9 +324,8 @@ public class PlayersController
     {
         if (player == null) return;
 
+        UmcLogger.Info($"Player '{player.Name}' setting skin {skinId}");
         var oldSkin = player.SkinId;
-        if (oldSkin == skinId) return;
-
         player.SkinId = skinId;
         OnPlayerSkinChanged?.Invoke(player, oldSkin, skinId);
     }
