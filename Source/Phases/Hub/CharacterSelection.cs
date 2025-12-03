@@ -182,7 +182,7 @@ public class CharacterSelection
     {
         if (_localCursors.ContainsKey(player)) return;
 
-        var cursor = new PlayerCursor(player) { ScreenPosition = GetSpawnScreenPosition() };
+        var cursor = new PlayerCursor(player, GetSpawnScreenPosition());
         cursor.OnConfirm += () => OnCursorConfirm(player);
         cursor.OnCancel += () => ReturnToSelection(player);
         _scene.Add(cursor);
@@ -193,7 +193,7 @@ public class CharacterSelection
     {
         if (_remoteCursors.ContainsKey(player)) return;
 
-        var cursor = new PlayerCursor(player) { ScreenPosition = GetSpawnScreenPosition() };
+        var cursor = new PlayerCursor(player, GetSpawnScreenPosition());
         _scene.Add(cursor);
         _remoteCursors[player] = cursor;
     }

@@ -13,13 +13,15 @@ public class PlayerCursor : Entity
 {
     public const float CursorScale = 0.6f;
     public const float MoveSpeed = 600f;
+    public const float InterpolationSpeed = 15f;
+    public const float SnapDistanceThreshold = 200f;
 
     private static MTexture _cursorTexture;
 
     public UmcPlayer Player { get; }
     public Color CursorColor { get; set; }
     public bool IsLocal => Player?.IsLocal ?? false;
-    public Vector2 ScreenPosition { get; set; }
+    public Vector2 ScreenPosition { get; private set; }
     public bool IsActive { get; set; } = true;
 
     public event Action OnConfirm;
@@ -30,7 +32,11 @@ public class PlayerCursor : Entity
     private const float BobAmount = 4f;
     private PlayerInput _input;
 
-    public PlayerCursor(UmcPlayer player)
+    // Interpolation for remote cursors
+    private Vector2 _targetPosition;
+    private bool _hasReceivedPosition;
+
+    public PlayerCursor(UmcPlayer player, Vector2 screenPosition)
     {
         Player = player;
         CursorColor = HubLobbyUi.PlayerColors[player.SlotIndex % HubLobbyUi.PlayerColors.Length];
@@ -39,12 +45,34 @@ public class PlayerCursor : Entity
         if (player.Device != null)
             _input = new PlayerInput(player.Device);
 
-        ScreenPosition = new Vector2(960f, 540f);
+        ScreenPosition = screenPosition;
+        _targetPosition = ScreenPosition;
         Tag = Tags.HUD | Tags.Global | Tags.PauseUpdate;
         Depth = -20000;
     }
 
-    public void SetPosition(Vector2 screenPos) => ScreenPosition = screenPos;
+    /// <summary>
+    /// Sets the cursor position. For remote players, this sets the target for interpolation.
+    /// </summary>
+    public void SetPosition(Vector2 screenPos)
+    {
+        if (IsLocal)
+        {
+            ScreenPosition = screenPos;
+            _targetPosition = screenPos;
+        }
+        else
+        {
+            // For remote players, set target position for interpolation
+            if (!_hasReceivedPosition)
+            {
+                // Snap to first received position
+                ScreenPosition = screenPos;
+                _hasReceivedPosition = true;
+            }
+            _targetPosition = screenPos;
+        }
+    }
 
     public override void Removed(Scene scene)
     {
@@ -62,6 +90,25 @@ public class PlayerCursor : Entity
 
         if (IsLocal && _input != null)
             UpdateInput();
+        else if (!IsLocal)
+            UpdateInterpolation();
+    }
+
+    private void UpdateInterpolation()
+    {
+        float distanceToTarget = Vector2.Distance(ScreenPosition, _targetPosition);
+
+        if (distanceToTarget > SnapDistanceThreshold)
+        {
+            // Snap if too far away
+            ScreenPosition = _targetPosition;
+        }
+        else if (distanceToTarget > 0.5f)
+        {
+            // Smooth exponential interpolation
+            float t = 1f - (float)Math.Exp(-InterpolationSpeed * Engine.DeltaTime);
+            ScreenPosition = Vector2.Lerp(ScreenPosition, _targetPosition, t);
+        }
     }
 
     private void UpdateInput()
