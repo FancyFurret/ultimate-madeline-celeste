@@ -12,6 +12,7 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Players;
 /// <summary>
 /// Entity representing a remote player in multiplayer. Handles rendering, interpolation, and effects.
 /// </summary>
+[Tracked]
 public class RemotePlayer : Entity
 {
     public const int MaxHairLength = 30;
@@ -298,9 +299,9 @@ public class RemotePlayer : Entity
         BuildAnimationMap();
     }
 
-    public void ApplySkin(string skinId)
+    public bool ApplySkin(string skinId)
     {
-        if (string.IsNullOrEmpty(skinId) || skinId == SkinsSystem.DEFAULT) return;
+        if (string.IsNullOrEmpty(skinId) || skinId == SkinsSystem.DEFAULT) return false;
 
         try
         {
@@ -310,14 +311,14 @@ public class RemotePlayer : Entity
                 string.IsNullOrEmpty(config.Character_ID))
             {
                 UmcLogger.Warn($"Skin config for '{skinId}' not found or has no Character_ID");
-                return;
+                return false;
             }
 
             string characterId = config.Character_ID;
             if (!GFX.SpriteBank.Has(characterId))
             {
                 UmcLogger.Warn($"Character ID '{characterId}' not found in sprite bank");
-                return;
+                return false;
             }
 
             string currentAnim = Sprite?.CurrentAnimationID ?? "idle";
@@ -338,10 +339,12 @@ public class RemotePlayer : Entity
             BuildAnimationMap();
 
             UmcLogger.Info($"Applied skin '{skinId}' (character: {characterId}) to remote player {UmcPlayer.Name}");
+            return true;
         }
         catch (Exception ex)
         {
             UmcLogger.Error($"Failed to apply skin '{skinId}' to remote player: {ex.Message}");
+            return false;
         }
     }
 }

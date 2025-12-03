@@ -17,7 +17,6 @@ public class PlayerStateSync
     public static PlayerStateSync Instance { get; private set; }
 
     private readonly Dictionary<int, Dictionary<string, int>> _localAnimationMaps = new();
-    private readonly HashSet<int> _sentGraphicsFor = new();
 
     public PlayerStateSync()
     {
@@ -31,15 +30,9 @@ public class PlayerStateSync
         messages.Register<PlayerEventMessage>(6, HandlePlayerEventMessage);
     }
 
-    public void InvalidateGraphics(int slotIndex)
-    {
-        _sentGraphicsFor.Remove(slotIndex);
-    }
-
     public void Clear()
     {
         _localAnimationMaps.Clear();
-        _sentGraphicsFor.Clear();
     }
 
     public void Update()
@@ -64,12 +57,6 @@ public class PlayerStateSync
             var playerEntity = spawner.GetLocalPlayer(player);
             if (playerEntity?.Scene == null || playerEntity.Sprite == null || playerEntity.Hair == null)
                 continue;
-
-            if (!_sentGraphicsFor.Contains(player.SlotIndex))
-            {
-                SendPlayerGraphics(player, playerEntity);
-                _sentGraphicsFor.Add(player.SlotIndex);
-            }
 
             int animId = -1;
             if (_localAnimationMaps.TryGetValue(player.SlotIndex, out var animMap))
@@ -149,6 +136,41 @@ public class PlayerStateSync
             Depth = playerEntity.Depth,
             SpriteMode = playerEntity.Sprite.Mode,
             SpriteRate = playerEntity.Sprite.Rate,
+            Animations = animations,
+            HairCount = (byte)hairCount,
+            HairScales = hairScales,
+            SkinId = umcPlayer.SkinId
+        };
+    }
+
+    /// <summary>
+    /// Builds a PlayerGraphicsMessage from a RemotePlayer's stored graphics data.
+    /// </summary>
+    public PlayerGraphicsMessage BuildRemotePlayerGraphics(UmcPlayer umcPlayer, RemotePlayer remotePlayer)
+    {
+        if (remotePlayer?.Sprite == null || remotePlayer.Hair == null) return null;
+
+        var graphics = remotePlayer.Graphics;
+        var animations = new string[graphics.AnimationIdToName.Count];
+        foreach (var kvp in graphics.AnimationIdToName)
+        {
+            animations[kvp.Key] = kvp.Value;
+        }
+
+        int hairCount = Math.Min(remotePlayer.Sprite.HairCount, RemotePlayer.MaxHairLength);
+        var hairScales = new Vector2[hairCount];
+        for (int i = 0; i < hairCount; i++)
+        {
+            hairScales[i] = remotePlayer.Hair.GetHairScale(i) *
+                new Vector2((i == 0 ? (int)remotePlayer.Hair.Facing : 1) / Math.Abs(remotePlayer.Sprite.Scale.X), 1);
+        }
+
+        return new PlayerGraphicsMessage
+        {
+            PlayerIndex = umcPlayer.SlotIndex,
+            Depth = remotePlayer.Depth,
+            SpriteMode = remotePlayer.Sprite.Mode,
+            SpriteRate = remotePlayer.Sprite.Rate,
             Animations = animations,
             HairCount = (byte)hairCount,
             HairScales = hairScales,

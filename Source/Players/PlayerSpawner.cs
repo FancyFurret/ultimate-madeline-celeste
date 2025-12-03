@@ -188,10 +188,22 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
     }
 
     /// <summary>
+    /// When true, all player inputs are disabled and players are frozen.
+    /// </summary>
+    public bool InputsFrozen { get; set; }
+
+    /// <summary>
     /// Swaps in player-specific inputs before each player's update, then restores after.
     /// </summary>
     private void OnPlayerUpdate(On.Celeste.Player.orig_Update orig, Player self)
     {
+        // If inputs are frozen, completely freeze the player
+        if (InputsFrozen)
+        {
+            self.Speed = Vector2.Zero;
+            return;
+        }
+
         var controller = self.Get<LocalPlayerController>();
         if (controller != null)
         {

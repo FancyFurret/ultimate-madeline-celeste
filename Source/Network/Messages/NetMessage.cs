@@ -278,3 +278,45 @@ public class CursorPositionMessage : INetMessage
     public void Deserialize(BinaryReader reader) { PlayerIndex = reader.ReadByte(); ScreenPosition = new(reader.ReadUInt16(), reader.ReadUInt16()); }
 }
 
+// Level voting messages
+public enum LevelVotePhase : byte { None, Countdown, Go, Eliminating, CameraZoom, Complete }
+
+public class LevelVoteStateMessage : INetMessage
+{
+    public LevelVotePhase Phase { get; set; }
+    public int CountdownNumber { get; set; }
+    public Vector2 WinningButtonPosition { get; set; }
+    public string WinningMapSID { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)Phase);
+        writer.Write((byte)CountdownNumber);
+        writer.WriteVector2(WinningButtonPosition);
+        writer.WriteNullableString(WinningMapSID);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        Phase = (LevelVotePhase)reader.ReadByte();
+        CountdownNumber = reader.ReadByte();
+        WinningButtonPosition = reader.ReadVector2();
+        WinningMapSID = reader.ReadString();
+    }
+}
+
+public class LevelVoteEliminateMessage : INetMessage
+{
+    public int PlayerSlotIndex { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerSlotIndex);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerSlotIndex = reader.ReadByte();
+    }
+}
+

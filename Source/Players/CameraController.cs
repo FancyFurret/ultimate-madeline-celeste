@@ -32,6 +32,33 @@ public class CameraController : HookedFeature<CameraController>
     private bool _isControlling;
     private readonly Dictionary<VirtualRenderTarget, (int Width, int Height)> _scaledTargets = new();
 
+    // Focus override for level selection zoom
+    private Vector2? _focusOverride;
+    private float _focusZoom = 1f;
+
+    /// <summary>
+    /// Sets a focus override that the camera will zoom to.
+    /// </summary>
+    public void SetFocusTarget(Vector2 position, float zoom = 1f)
+    {
+        _focusOverride = position;
+        _focusZoom = zoom;
+    }
+
+    /// <summary>
+    /// Clears the focus override.
+    /// </summary>
+    public void ClearFocusTarget()
+    {
+        _focusOverride = null;
+        _focusZoom = 1f;
+    }
+
+    /// <summary>
+    /// Whether a focus override is currently active.
+    /// </summary>
+    public bool HasFocusOverride => _focusOverride.HasValue;
+
     protected override void Hook()
     {
         base.Hook();
@@ -90,6 +117,26 @@ public class CameraController : HookedFeature<CameraController>
 
     private void UpdateCamera(Level level)
     {
+        // If focus override is set, zoom to that target
+        if (_focusOverride.HasValue)
+        {
+            _targetZoom = _focusZoom;
+            _currentZoom = MathHelper.Lerp(_currentZoom, _targetZoom, ZoomLerpSpeed * Engine.DeltaTime);
+
+            // Calculate camera position to center on focus target
+            float visibleWidth = ScreenWidth / _currentZoom;
+            float visibleHeight = ScreenHeight / _currentZoom;
+            _targetCameraPos = _focusOverride.Value - new Vector2(visibleWidth / 2f, visibleHeight / 2f);
+
+            Vector2 currentCameraPos = level.Camera.Position;
+            Vector2 newCameraPos = Vector2.Lerp(currentCameraPos, _targetCameraPos, CameraLerpSpeed * Engine.DeltaTime);
+
+            level.Camera.Position = newCameraPos;
+            level.Zoom = _currentZoom;
+            _isControlling = true;
+            return;
+        }
+
         var positions = GetAllCameraTargets(level);
 
         if (positions.Count == 0)

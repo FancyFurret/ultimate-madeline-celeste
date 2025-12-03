@@ -31,7 +31,6 @@ public class MessageRegistry
         if (_idToRegistration.ContainsKey(typeId))
         {
             // throw new InvalidOperationException($"Message type ID {typeId} already registered");
-            UmcLogger.Warn($"Message already registered: {typeof(T).Name}");
         }
 
         _idToRegistration[typeId] = new MessageRegistration

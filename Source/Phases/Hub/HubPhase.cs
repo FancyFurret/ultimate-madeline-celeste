@@ -4,6 +4,7 @@ using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
+using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using Monocle;
@@ -22,8 +23,15 @@ public class HubPhase : Entity
 
     private readonly Dictionary<int, float> _leaveHoldTimes = new();
     private CharacterSelection _characterSelection;
+    private LevelSelection _levelSelection;
 
     public bool IsSelecting => _characterSelection?.IsSelecting ?? false;
+    public bool IsCountdownActive => _levelSelection?.IsCountdownActive ?? false;
+
+    /// <summary>
+    /// When true, players cannot join and movement is frozen.
+    /// </summary>
+    public bool IsLevelTransitioning { get; set; }
     public bool IsPlayerSelecting(UmcPlayer player) => _characterSelection?.IsPlayerSelecting(player) ?? false;
     public Vector2? GetSpawnPosition(UmcPlayer player) => _characterSelection?.GetSpawnPosition(player);
 
@@ -65,6 +73,7 @@ public class HubPhase : Entity
 
         var players = GameSession.Instance?.Players;
         _characterSelection = new CharacterSelection(scene, players);
+        _levelSelection = new LevelSelection(scene, players);
 
         scene.Add(new HubLobbyUi());
 
@@ -72,6 +81,7 @@ public class HubPhase : Entity
         if (net != null)
         {
             _characterSelection.RegisterMessages(net.Messages);
+            _levelSelection.RegisterMessages(net.Messages);
         }
     }
 
@@ -81,6 +91,8 @@ public class HubPhase : Entity
 
         _characterSelection?.Cleanup();
         _characterSelection = null;
+        _levelSelection?.Cleanup();
+        _levelSelection = null;
         _leaveHoldTimes.Clear();
 
         if (Instance == this) Instance = null;
@@ -101,12 +113,20 @@ public class HubPhase : Entity
         UpdateBackToSelection(session);
         _characterSelection?.Update(level);
         _characterSelection?.CleanupRemovedPlayers(session);
+
+        // Only run level selection when not in character selection
+        if (!IsSelecting)
+        {
+            _levelSelection?.Update(level);
+        }
     }
 
     #region Player Join/Leave
 
     private void UpdateJoinInput(GameSession session)
     {
+        if (IsLevelTransitioning) return;
+
         var joinDevice = session.Players.DetectJoinInput();
         if (joinDevice != null)
         {
@@ -123,6 +143,8 @@ public class HubPhase : Entity
 
     private void UpdateLeaveInput(GameSession session)
     {
+        if (IsLevelTransitioning) return;
+
         foreach (var player in session.Players.All)
         {
             if (!player.IsLocal || player.Device == null) continue;
@@ -150,6 +172,8 @@ public class HubPhase : Entity
 
     private void UpdateBackToSelection(GameSession session)
     {
+        if (IsLevelTransitioning) return;
+
         foreach (var player in session.Players.All)
         {
             if (!player.IsLocal || player.Device == null) continue;

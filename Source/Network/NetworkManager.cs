@@ -149,6 +149,7 @@ public class NetworkManager
         if (!IsActive) return;
         UmcLogger.Info("Leaving session...");
         _lobbyController.LeaveLobby();
+        GameSession.End();
     }
 
     private void HandlePeerDisconnected(CSteamID steamId)

@@ -155,12 +155,21 @@ public class LobbyController
                 PlayerName = p.Name
             };
 
-            // Include graphics if player is spawned
+            // Include graphics for all players (local and remote)
             if (spawner != null && stateSync != null)
             {
-                var playerEntity = spawner.GetLocalPlayer(p);
-                if (playerEntity != null)
-                    msg.Graphics = stateSync.BuildPlayerGraphics(p, playerEntity);
+                if (p.IsLocal)
+                {
+                    var playerEntity = spawner.GetLocalPlayer(p);
+                    if (playerEntity != null)
+                        msg.Graphics = stateSync.BuildPlayerGraphics(p, playerEntity);
+                }
+                else
+                {
+                    var remotePlayer = spawner.GetRemotePlayer(p);
+                    if (remotePlayer != null)
+                        msg.Graphics = stateSync.BuildRemotePlayerGraphics(p, remotePlayer);
+                }
             }
 
             playerMessages.Add(msg);
