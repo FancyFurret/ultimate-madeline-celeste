@@ -116,6 +116,10 @@ public static class PauseMenuExtensions
         {
             level.PauseMainMenuOpen = false;
             Audio.Play("event:/ui/main/button_select");
+
+            _currentMenu = null;
+            UnsubscribeFromConnectionEvents();
+
             NetworkManager.Instance?.LeaveSession();
             level.DoScreenWipe(false, () =>
             {
@@ -180,34 +184,34 @@ public static class PauseMenuExtensions
 
         // Copy lobby code button
         var copyCodeButton = new TextMenu.Button("Copy Lobby Code");
-            copyCodeButton.Pressed(() =>
+        copyCodeButton.Pressed(() =>
+        {
+            var code = LobbyController.Instance?.LobbyCode;
+            if (!string.IsNullOrEmpty(code))
             {
-                var code = LobbyController.Instance?.LobbyCode;
-                if (!string.IsNullOrEmpty(code))
-                {
-                    TextInput.SetClipboardText(code);
-                    copyCodeButton.Label = "Copied!";
-                    Audio.Play("event:/ui/main/button_select");
-                }
-            });
-            menu.Add(copyCodeButton);
+                TextInput.SetClipboardText(code);
+                copyCodeButton.Label = "Copied!";
+                Audio.Play("event:/ui/main/button_select");
+            }
+        });
+        menu.Add(copyCodeButton);
 
         // Invite friends button
-            var inviteButton = new TextMenu.Button("Invite Friends");
-            inviteButton.Pressed(() =>
-            {
-                controller?.InviteFriends();
-                Audio.Play("event:/ui/main/button_select");
-            });
-            menu.Add(inviteButton);
+        var inviteButton = new TextMenu.Button("Invite Friends");
+        inviteButton.Pressed(() =>
+        {
+            controller?.InviteFriends();
+            Audio.Play("event:/ui/main/button_select");
+        });
+        menu.Add(inviteButton);
 
         // Leave online session button
         var leaveButton = new TextMenu.Button("Leave Online");
         leaveButton.Pressed(() =>
             {
-            leaveButton.Label = "Leaving...";
-            controller?.LeaveSession();
-            Audio.Play("event:/ui/main/button_back");
+                leaveButton.Label = "Leaving...";
+                controller?.LeaveSession();
+                Audio.Play("event:/ui/main/button_back");
             });
         menu.Add(leaveButton);
     }
