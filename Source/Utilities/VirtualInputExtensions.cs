@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using Celeste.Mod.UltimateMadelineCeleste.Core;
+using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Microsoft.Xna.Framework.Input;
 using Monocle;
 

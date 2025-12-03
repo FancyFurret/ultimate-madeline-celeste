@@ -34,15 +34,13 @@
         <Reference Include="$(CelestePrefix)\MMHOOK_Celeste.dll" Private="false" />
     </ItemGroup>
 
-    <!-- CelesteNet references -->
     <PropertyGroup>
-        <CelesteNetZip>$(CelestePrefix)\Mods\CelesteNet.Client.zip</CelesteNetZip>
-        <CelesteNetLibDir>lib\CelesteNet</CelesteNetLibDir>
+        <SkinHelperPlusZip>$(CelestePrefix)\Mods\SkinModHelperPlus.zip</SkinHelperPlusZip>
+        <SkinHelperLibDir>lib\SkinModHelper</SkinHelperLibDir>
     </PropertyGroup>
     
     <ItemGroup>
-        <Reference Include="$(CelesteNetLibDir)\CelesteNet.Client.dll" Private="false" />
-        <Reference Include="$(CelesteNetLibDir)\CelesteNet.Shared.dll" Private="false" />
+        <Reference Include="$(SkinHelperLibDir)\SkinModHelperPlus.dll" Private="false" />
     </ItemGroup>
 
     <ItemGroup>
@@ -62,11 +60,15 @@
         <ItemGroup>
             <GraphicsFiles Include="..\Graphics\**\*.*" />
         </ItemGroup>
+        <ItemGroup>
+            <LoennFiles Include="..\Loenn\**\*.*" />
+        </ItemGroup>
         <Copy SourceFiles="..\everest.yaml" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste" />
         <Copy SourceFiles="..\bin\UltimateMadelineCeleste.dll" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste\bin" />
         <Copy SourceFiles="..\bin\UltimateMadelineCeleste.pdb" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste\bin" />
         <Copy SourceFiles="@(MapFiles)" DestinationFiles="@(MapFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Maps\%(RecursiveDir)%(Filename)%(Extension)')" />
         <Copy SourceFiles="@(GraphicsFiles)" DestinationFiles="@(GraphicsFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Graphics\%(RecursiveDir)%(Filename)%(Extension)')" />
+        <Copy SourceFiles="@(LoennFiles)" DestinationFiles="@(LoennFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Loenn\%(RecursiveDir)%(Filename)%(Extension)')" />
     </Target>
 
     <Target Name="PackageMod" AfterTargets="CopyFiles" Inputs="$(ZippedFiles)" Outputs="..\UltimateMadelineCeleste.zip" Condition="'$(Configuration)' == 'Release'">
@@ -80,10 +82,9 @@
         <PathMap>$(MSBuildProjectDirectory)=UltimateMadelineCeleste/</PathMap>
     </PropertyGroup>
 
-    <!-- Extract CelesteNet DLLs from zip before build -->
-    <Target Name="ExtractCelesteNet" BeforeTargets="ResolveAssemblyReferences" Condition="Exists('$(CelesteNetZip)')">
-        <MakeDir Directories="$(CelesteNetLibDir)" />
-        <ExtractFromZip ZipPath="$(CelesteNetZip)" FilesToExtract="CelesteNet.Client.dll;CelesteNet.Shared.dll" OutputDir="$(CelesteNetLibDir)" />
+    <Target Name="ExtractSkinHelper" BeforeTargets="ResolveAssemblyReferences" Condition="Exists('$(SkinHelperPlusZip)')">
+        <MakeDir Directories="$(SkinHelperLibDir)" />
+        <ExtractFromZip ZipPath="$(SkinHelperPlusZip)" FilesToExtract="SkinModHelperPlus.dll" OutputDir="$(SkinHelperLibDir)" />
     </Target>
 
     <!-- Inline task to extract specific files from a zip -->

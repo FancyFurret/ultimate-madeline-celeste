@@ -1,0 +1,6 @@
+# Ultimate Madeline Celeste - Loenn Language File
+
+# Entities
+entities.UltimateMadelineCeleste/SkinPedestal.placements.name.normal=Skin Pedestal
+entities.UltimateMadelineCeleste/SkinPedestal.attributes.description.pedestalIndex=The index of this pedestal. Each pedestal with a different index will show a different random skin. Pedestals with the same index will show the same skin.
+
