@@ -158,6 +158,9 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         _localPlayers[umcPlayer] = player;
         UmcLogger.Info($"Spawned local player for {umcPlayer.Name} at {spawnPos}");
 
+        // Send player graphics to other clients so they have the animation map
+        PlayerStateSync.Instance?.SendPlayerGraphics(umcPlayer, player);
+
         return player;
     }
 

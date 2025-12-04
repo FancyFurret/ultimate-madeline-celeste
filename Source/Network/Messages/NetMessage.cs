@@ -153,7 +153,15 @@ public class PlayerFrameMessage : INetMessage
         CurrentAnimationID = BinaryExtensions.Read7BitEncodedInt(reader);
         CurrentAnimationFrame = BinaryExtensions.Read7BitEncodedInt(reader);
         HairColors = reader.ReadHairColors();
-        DashDir = Dashing ? new Vector2((float)Math.Cos(reader.ReadByte() / 256.0 * 2 * Math.PI), (float)Math.Sin(reader.ReadByte() / 256.0 * 2 * Math.PI)) : null;
+        if (Dashing)
+        {
+            double angle = reader.ReadByte() / 256.0 * 2 * Math.PI;
+            DashDir = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle));
+        }
+        else
+        {
+            DashDir = null;
+        }
     }
 }
 
