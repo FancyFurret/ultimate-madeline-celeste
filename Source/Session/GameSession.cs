@@ -7,6 +7,7 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Session;
 public enum GamePhase
 {
     Lobby,
+    Playing,
 }
 
 /// <summary>

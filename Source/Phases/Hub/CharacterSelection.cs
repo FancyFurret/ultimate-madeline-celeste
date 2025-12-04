@@ -209,18 +209,6 @@ public class CharacterSelection
         _remoteCursors[player] = cursor;
     }
 
-    private Vector2 GetSpawnWorldPosition()
-    {
-        var level = _scene as Level;
-        if (level == null) return new Vector2(160, 90);
-
-        Vector2 worldSpawn = level.Session.RespawnPoint ?? new Vector2(160, 90);
-        var playerData = level.Session.LevelData?.Entities?.FirstOrDefault(e => e.Name == "player");
-        if (playerData != null) worldSpawn = new Vector2(playerData.Position.X, playerData.Position.Y);
-
-        return worldSpawn;
-    }
-
     private void OnCursorConfirm(UmcPlayer player)
     {
         if (!_selectingPlayers.Contains(player)) return;

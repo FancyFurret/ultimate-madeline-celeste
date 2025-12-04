@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Steam;
+using Celeste.Mod.UltimateMadelineCeleste.Phases.Playing;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Monocle;
@@ -142,6 +143,9 @@ public static class PauseMenuExtensions
             _currentMenu.Add(_resumeButton);
         }
 
+        // Add Back to Lobby button if we're in a playing phase and are the host
+        AddBackToLobbyButton(_currentMenu);
+
         // Only show online options if we're in an online session
         if (NetworkManager.Instance?.IsOnline == true)
         {
@@ -162,6 +166,23 @@ public static class PauseMenuExtensions
         {
             _currentMenu.Add(_quitButton);
         }
+    }
+
+    private static void AddBackToLobbyButton(TextMenu menu)
+    {
+        // Only show if we're in the Playing phase and are the host
+        var session = GameSession.Instance;
+        var net = NetworkManager.Instance;
+        if (session == null || session.Phase != GamePhase.Playing) return;
+        if (net != null && !net.IsHost) return;
+
+        var backToLobbyButton = new TextMenu.Button("Back to Lobby");
+        backToLobbyButton.Pressed(() =>
+        {
+            Audio.Play("event:/ui/main/button_select");
+            PlayingPhase.Instance?.ReturnToLobby();
+        });
+        menu.Add(backToLobbyButton);
     }
 
     private static void ClearMenuItems(TextMenu menu)

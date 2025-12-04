@@ -20,9 +20,9 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
 
     public IReadOnlyDictionary<UmcPlayer, Player> LocalPlayers => _localPlayers;
     public IReadOnlyDictionary<UmcPlayer, RemotePlayer> RemotePlayers => _remotePlayers;
-    public bool IsMultiplayerLevel { get; private set; }
 
-    private Vector2? _spawnPosition;
+    public bool IsMultiplayerLevel { get; private set; }
+    public Vector2 SpawnPosition { get; private set; }
 
     protected override void Hook()
     {
@@ -42,22 +42,27 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
 
     private void OnLevelLoad(On.Celeste.Level.orig_LoadLevel orig, Level self, Player.IntroTypes playerIntro, bool isFromLoader)
     {
-        IsMultiplayerLevel = self.Session.Area.SID == HubStageId;
+        UmcLogger.Info($"ONLEVELLOAD: {self.Session.Area.SID}");
+        // We're in a multiplayer level if we're in an active session
+        IsMultiplayerLevel = GameSession.Started;
+        UmcLogger.Info(IsMultiplayerLevel.ToString());
+        InputsFrozen = false;
 
+        // Always calculate spawn position for multiplayer levels
         if (IsMultiplayerLevel)
         {
-            var playerData = self.Session.LevelData?.Entities?.FirstOrDefault(e => e.Name == "player");
-            _spawnPosition = playerData != null
-                ? new Vector2(playerData.Position.X, playerData.Position.Y)
-                : self.Session.RespawnPoint ?? new Vector2(160, 90);
+            UmcLogger.Info($"Found player data {self.Session.LevelData?.Entities?.Count}");
+            SpawnPosition = self.Session.LevelData?.DefaultSpawn ??
+                            self.Session.LevelData?.Spawns.FirstOrDefault() ??
+                            Vector2.Zero;
         }
 
         orig(self, playerIntro, isFromLoader);
 
+        // Always remove default player when in a multiplayer session
         if (IsMultiplayerLevel)
         {
             RemoveDefaultPlayer(self);
-            RespawnAllSessionPlayers(self);
         }
     }
 
@@ -81,10 +86,13 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         }
     }
 
-    private void RespawnAllSessionPlayers(Level level)
+    public void SpawnAllSessionPlayers(Level level, Vector2? overrideSpawnPosition = null)
     {
+        UmcLogger.Info("SPAWNING ALL SESSION PLAYERS!!");
         var session = GameSession.Instance;
         if (session == null) return;
+
+        var spawnPos = overrideSpawnPosition ?? SpawnPosition;
 
         foreach (var umcPlayer in session.Players.All)
         {
@@ -95,10 +103,38 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
             }
 
             if (umcPlayer.IsLocal)
-                SpawnLocalPlayer(level, umcPlayer);
+                SpawnLocalPlayer(level, umcPlayer, spawnPos);
             else
-                SpawnRemotePlayer(level, umcPlayer);
+                SpawnRemotePlayer(level, umcPlayer, spawnPos);
         }
+    }
+
+    public void DespawnAllSessionPlayers()
+    {
+        var session = GameSession.Instance;
+        if (session == null) return;
+
+        foreach (var umcPlayer in session.Players.All.ToList())
+        {
+            DespawnPlayer(umcPlayer);
+        }
+    }
+
+    public void RespawnAllSessionPlayers(Level level, Vector2? spawnPosition = null)
+    {
+        DespawnAllSessionPlayers();
+        SpawnAllSessionPlayers(level, spawnPosition);
+    }
+
+    public void RespawnPlayer(Level level, UmcPlayer umcPlayer, Vector2? spawnPosition = null)
+    {
+        DespawnPlayer(umcPlayer);
+
+        var spawnPos = spawnPosition ?? SpawnPosition;
+        if (umcPlayer.IsLocal)
+            SpawnLocalPlayer(level, umcPlayer, spawnPos);
+        else
+            SpawnRemotePlayer(level, umcPlayer, spawnPos);
     }
 
     public Player SpawnLocalPlayer(Level level, UmcPlayer umcPlayer, Vector2? spawnPosition = null)
@@ -109,7 +145,7 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
             return localPlayer;
         }
 
-        var spawnPos = spawnPosition ?? _spawnPosition ?? level.Session.RespawnPoint ?? new Vector2(160, 90);
+        var spawnPos = spawnPosition ?? SpawnPosition;
         var spriteMode = level.Session.Inventory.Backpack
             ? PlayerSpriteMode.Madeline
             : PlayerSpriteMode.MadelineNoBackpack;
@@ -140,7 +176,7 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
             return null;
         }
 
-        var spawnPos = spawnPosition ?? _spawnPosition ?? level.Session.RespawnPoint ?? new Vector2(160, 90);
+        var spawnPos = spawnPosition ?? SpawnPosition;
         var remotePlayer = new RemotePlayer(umcPlayer, spawnPos);
         level.Add(remotePlayer);
 

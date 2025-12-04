@@ -66,6 +66,7 @@
         <Copy SourceFiles="..\everest.yaml" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste" />
         <Copy SourceFiles="..\bin\UltimateMadelineCeleste.dll" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste\bin" />
         <Copy SourceFiles="..\bin\UltimateMadelineCeleste.pdb" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste\bin" />
+        <Copy SourceFiles="..\Dialog\English.txt" DestinationFolder="$(CelestePrefix)\Mods\UltimateMadelineCeleste\Dialog" />
         <Copy SourceFiles="@(MapFiles)" DestinationFiles="@(MapFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Maps\%(RecursiveDir)%(Filename)%(Extension)')" />
         <Copy SourceFiles="@(GraphicsFiles)" DestinationFiles="@(GraphicsFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Graphics\%(RecursiveDir)%(Filename)%(Extension)')" />
         <Copy SourceFiles="@(LoennFiles)" DestinationFiles="@(LoennFiles->'$(CelestePrefix)\Mods\UltimateMadelineCeleste\Loenn\%(RecursiveDir)%(Filename)%(Extension)')" />

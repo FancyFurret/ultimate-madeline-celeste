@@ -181,7 +181,7 @@ public class CameraController : HookedFeature<CameraController>
                 positions.Add(remote.Position);
         }
 
-        if (HubPhase.Instance.IsSelecting)
+        if (HubPhase.Instance?.IsSelecting ?? false)
         {
             var pedestals = level.Tracker.GetEntities<SkinPedestal>();
             foreach (var entity in pedestals)

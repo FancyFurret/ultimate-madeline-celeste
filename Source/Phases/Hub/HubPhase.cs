@@ -18,8 +18,6 @@ public class HubPhase : Entity
 {
     public static HubPhase Instance { get; private set; }
 
-    private const string HubStageId = "FancyFurret/UltimateMadelineCeleste/Hub";
-
     private readonly Dictionary<int, HoldAction> _activeHoldActions = new();
     private CharacterSelection _characterSelection;
     private LevelSelection _levelSelection;
@@ -46,34 +44,13 @@ public class HubPhase : Entity
         Depth = 0;
     }
 
-    public static void Load()
-    {
-        On.Celeste.Level.LoadLevel += OnLevelLoad;
-    }
-
-    public static void Unload()
-    {
-        On.Celeste.Level.LoadLevel -= OnLevelLoad;
-    }
-
-    private static void OnLevelLoad(On.Celeste.Level.orig_LoadLevel orig, Level self, Player.IntroTypes playerIntro, bool isFromLoader)
-    {
-        orig(self, playerIntro, isFromLoader);
-
-        if (self.Session.Area.SID == HubStageId)
-        {
-            if (!GameSession.Started)
-                NetworkManager.Instance?.StartLocalSession();
-
-            if (self.Entities.FindFirst<HubPhase>() == null)
-                self.Add(new HubPhase());
-        }
-    }
-
     public override void Added(Scene scene)
     {
         base.Added(scene);
         Instance = this;
+
+        // Set phase to Lobby
+        GameSession.Instance?.SetPhase(GamePhase.Lobby);
 
         var players = GameSession.Instance?.Players;
         _characterSelection = new CharacterSelection(scene, players);
@@ -86,6 +63,12 @@ public class HubPhase : Entity
         {
             _characterSelection.RegisterMessages(net.Messages);
             _levelSelection.RegisterMessages(net.Messages);
+        }
+
+        // Spawn all session players who have skins selected
+        if (scene is Level level)
+        {
+            PlayerSpawner.Instance?.SpawnAllSessionPlayers(level);
         }
     }
 

@@ -1,1 +1,1 @@
-﻿modoptions_motionsmoothing_tasmode=TAS Mode
+﻿FancyFurret_UltimateMadelineCeleste_Hub=UMC Lobby

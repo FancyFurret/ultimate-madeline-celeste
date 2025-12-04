@@ -320,3 +320,30 @@ public class LevelVoteEliminateMessage : INetMessage
     }
 }
 
+/// <summary>
+/// Sent by host to all clients when loading a level.
+/// </summary>
+public class LoadLevelMessage : INetMessage
+{
+    public string MapSID { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.WriteNullableString(MapSID);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        MapSID = reader.ReadString();
+    }
+}
+
+/// <summary>
+/// Sent by host to all clients when returning to the lobby.
+/// </summary>
+public class ReturnToLobbyMessage : INetMessage
+{
+    public void Serialize(BinaryWriter writer) { }
+    public void Deserialize(BinaryReader reader) { }
+}
+

@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Reflection;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
+using Celeste.Mod.UltimateMadelineCeleste.Phases;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
-using Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Menu;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Overlays;
 using Celeste.Pico8;
@@ -25,6 +25,7 @@ public class UmcModule : EverestModule
 
     private SaveSlotMenu SaveSlotMenu { get; } = new();
     private UmcInputHandler InputHandler { get; } = new();
+    private PhaseManager PhaseManager { get; } = new();
     private PlayerSpawner PlayerSpawner { get; } = new();
     private CameraController CameraController { get; } = new();
     private NetworkManager NetworkManager { get; } = new();
@@ -45,12 +46,12 @@ public class UmcModule : EverestModule
         InputHandler.Load();
         InputHandler.Enable();
         PauseMenuExtensions.Load();
-        HubPhase.Load();
         OnlinePlayersOverlay.Load();
 
         PlayerSpawner.Load();
         CameraController.Load();
         NetworkManager.Load();
+        PhaseManager.Load();
 
         On.Monocle.Scene.Begin += SceneBeginHook;
         On.Monocle.Engine.Update += EngineUpdateHook;
@@ -63,7 +64,7 @@ public class UmcModule : EverestModule
         SaveSlotMenu.Unload();
         InputHandler.Unload();
         PauseMenuExtensions.Unload();
-        HubPhase.Unload();
+        PhaseManager.Unload();
         OnlinePlayersOverlay.Unload();
 
         PlayerSpawner.Unload();

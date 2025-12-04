@@ -18,8 +18,8 @@ public enum HoldActionType
 /// </summary>
 public class HoldAction
 {
-    public const float DefaultDuration = 2f;
-    public const float VisualDelay = 0.5f;
+    public const float DefaultDuration = 1.25f;
+    public const float VisualDelay = 0.1f;
 
     public UmcPlayer Player { get; }
     public HoldActionType ActionType { get; }

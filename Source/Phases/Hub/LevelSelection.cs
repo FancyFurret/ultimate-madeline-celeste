@@ -4,6 +4,7 @@ using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
+using Celeste.Mod.UltimateMadelineCeleste.Phases.Playing;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
@@ -58,6 +59,7 @@ public class LevelSelection
     {
         messages.Register<LevelVoteStateMessage>(20, HandleVoteState);
         messages.Register<LevelVoteEliminateMessage>(21, HandleVoteEliminate);
+        messages.Register<LoadLevelMessage>(22, HandleLoadLevel);
     }
 
     private void HandleVoteState(CSteamID sender, LevelVoteStateMessage message)
@@ -148,6 +150,15 @@ public class LevelSelection
                 }
             }
         }
+    }
+
+    private void HandleLoadLevel(CSteamID sender, LoadLevelMessage message)
+    {
+        // Only clients handle this
+        if (IsHost) return;
+
+        UmcLogger.Info($"Received load level message: {message.MapSID}");
+        LoadLevelInternal(message.MapSID);
     }
 
     private void BroadcastVoteState(LevelVotePhase phase, int countdownNumber = 0)
@@ -568,7 +579,23 @@ public class LevelSelection
     {
         UmcLogger.Info($"=== STARTING LEVEL: {_selectedMapSID} ===");
 
-        // TODO: Actually load the level here
+        // Broadcast to clients
+        var net = NetworkManager.Instance;
+        if (net?.IsOnline == true)
+        {
+            net.Messages.Broadcast(new LoadLevelMessage { MapSID = _selectedMapSID });
+        }
+
+        LoadLevelInternal(_selectedMapSID);
+    }
+
+    private void LoadLevelInternal(string mapSID)
+    {
+        // Despawn all current players before transitioning
+        PlayerSpawner.Instance?.DespawnAllSessionPlayers();
+
+        // Use PhaseManager to transition to the level
+        PhaseManager.Instance?.TransitionToLevel(mapSID);
     }
 }
 
