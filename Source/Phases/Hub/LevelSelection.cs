@@ -604,8 +604,8 @@ public class LevelSelection
 /// </summary>
 public class LevelVotingCountdown : Entity
 {
-    private const float NumberScaleStart = 10f;
-    private const float NumberScaleEnd = 5.5f;
+    private const float NumberScaleStart = 7.5f;
+    private const float NumberScaleEnd = 4.1f;
 
     private bool _visible;
     private int _currentNumber;
@@ -683,7 +683,7 @@ public class LevelVotingCountdown : Entity
 
         if (!_visible) return;
 
-        Vector2 center = new Vector2(1920f / 2f, 1080f / 2f);
+        Vector2 center = new Vector2(1920f / 2f, 1080f / 4f);
 
         // Draw circular transparent background
         DrawCircleBackground(center);
@@ -706,7 +706,7 @@ public class LevelVotingCountdown : Entity
         if (_circleTexture != null)
         {
             // Draw the circle texture scaled down and more transparent
-            float scale = 0.6f;
+            float scale = 0.34f;
             _circleTexture.DrawCentered(center, Color.White * 0.5f, scale);
         }
     }
@@ -714,11 +714,11 @@ public class LevelVotingCountdown : Entity
     private void DrawVotingText(Vector2 center)
     {
         string text = "Voting";
-        float scale = 2.4f;
+        float scale = 1.4f;
         Vector2 textSize = ActiveFont.Measure(text) * scale;
 
         // Position above center
-        Vector2 textPos = center - new Vector2(textSize.X / 2f, 150f + textSize.Y / 2f);
+        Vector2 textPos = center - new Vector2(textSize.X / 2f, 85f + textSize.Y / 2f);
 
         ActiveFont.DrawOutline(text, textPos, Vector2.Zero, Vector2.One * scale, Color.White, 2f, Color.Black);
     }
@@ -735,7 +735,7 @@ public class LevelVotingCountdown : Entity
         float alpha = MathHelper.Lerp(0.8f, 1f, scaleT);
 
         Vector2 textSize = ActiveFont.Measure(text) * scale;
-        Vector2 textPos = center - new Vector2(textSize.X / 2f, textSize.Y / 2f - 100f);
+        Vector2 textPos = center - new Vector2(textSize.X / 2f, textSize.Y / 2f - 50f);
 
         ActiveFont.DrawOutline(text, textPos, Vector2.Zero, Vector2.One * scale, Color.White * alpha, 3f, Color.Black);
     }
@@ -746,11 +746,11 @@ public class LevelVotingCountdown : Entity
 
         // Use same scale as number end scale, with pop animation
         float scaleT = Ease.BackOut(_goAnimProgress);
-        float scale = NumberScaleEnd * scaleT;
+        float scale = NumberScaleEnd * 0.7f * scaleT;
 
         Vector2 textSize = ActiveFont.Measure(text) * scale;
         // Same position as the number
-        Vector2 textPos = center - new Vector2(textSize.X / 2f, textSize.Y / 2f - 100f);
+        Vector2 textPos = center - new Vector2(textSize.X / 2f, textSize.Y / 2f - 50f);
 
         ActiveFont.DrawOutline(text, textPos, Vector2.Zero, Vector2.One * scale, Color.LimeGreen, 3f, Color.Black);
     }
