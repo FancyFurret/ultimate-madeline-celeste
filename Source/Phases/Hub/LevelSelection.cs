@@ -24,7 +24,7 @@ public class LevelSelection
     private const float ArrowEliminationInterval = 1f;
     private const float CameraZoomDuration = 1.5f;
 
-    private readonly Scene _scene;
+    private readonly HubPhase _hub;
     private PlayersController _players;
 
     private LevelVotingCountdown _countdownUI;
@@ -49,9 +49,9 @@ public class LevelSelection
 
     private bool IsHost => NetworkManager.Instance?.IsHost ?? true;
 
-    public LevelSelection(Scene scene, PlayersController players)
+    public LevelSelection(HubPhase hub, PlayersController players)
     {
-        _scene = scene;
+        _hub = hub;
         _players = players;
     }
 
@@ -78,7 +78,7 @@ public class LevelSelection
                     if (_countdownUI == null)
                     {
                         _countdownUI = new LevelVotingCountdown();
-                        _scene.Add(_countdownUI);
+                        _hub.Scene.Add(_countdownUI);
                     }
                     _countdownUI.Show(message.CountdownNumber);
                 }
@@ -136,7 +136,7 @@ public class LevelSelection
         // Only clients handle this
         if (IsHost) return;
 
-        if (_scene is Level level)
+        if (_hub.Scene is Level level)
         {
             // Find the button with this player's arrow and hide it
             var levelButtons = level.Tracker.GetEntities<LevelButton>().Cast<LevelButton>().ToList();
@@ -296,7 +296,7 @@ public class LevelSelection
         if (_countdownUI == null)
         {
             _countdownUI = new LevelVotingCountdown();
-            _scene.Add(_countdownUI);
+            _hub.Scene.Add(_countdownUI);
         }
 
         int startNumber = (int)System.Math.Ceiling(_countdownTimer);

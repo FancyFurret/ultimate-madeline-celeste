@@ -138,8 +138,7 @@ public class PlayerStateSync
             SpriteRate = playerEntity.Sprite.Rate,
             Animations = animations,
             HairCount = (byte)hairCount,
-            HairScales = hairScales,
-            SkinId = umcPlayer.SkinId
+            HairScales = hairScales
         };
     }
 
@@ -173,8 +172,7 @@ public class PlayerStateSync
             SpriteRate = remotePlayer.Sprite.Rate,
             Animations = animations,
             HairCount = (byte)hairCount,
-            HairScales = hairScales,
-            SkinId = umcPlayer.SkinId
+            HairScales = hairScales
         };
     }
 
@@ -212,8 +210,6 @@ public class PlayerStateSync
 
         var player = players.Get(senderId.m_SteamID, message.PlayerIndex);
         if (player == null || player.IsLocal) return;
-
-        players.SetPlayerSkin(player, message.SkinId);
 
         var remotePlayer = spawner.GetRemotePlayer(player);
         remotePlayer?.UpdateGraphics(message);

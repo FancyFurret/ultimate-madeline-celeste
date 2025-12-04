@@ -21,8 +21,6 @@ public class PlayersController
 
     public List<UmcPlayer> All { get; } = new();
 
-    public event Action<UmcPlayer, string, string> OnPlayerSkinChanged;
-
     private readonly List<int> _localSlotIndices = new();
     private Action<bool, int> _pendingJoinCallback;
     private InputDevice _pendingJoinDevice;
@@ -89,7 +87,8 @@ public class PlayersController
             {
                 ClientSteamId = LocalClientId,
                 PlayerIndex = slot,
-                PlayerName = playerName
+                PlayerName = playerName,
+                SkinId = player.SkinId
             });
 
             onComplete?.Invoke(true, slot);
@@ -186,7 +185,8 @@ public class PlayersController
         {
             ClientSteamId = clientId,
             PlayerIndex = slotIndex,
-            PlayerName = playerName
+            PlayerName = playerName,
+            SkinId = player.SkinId
         });
 
         UmcLogger.Info($"Host: Added player {playerName} at slot {slotIndex} for {clientName}");
@@ -228,19 +228,18 @@ public class PlayersController
 
     private void HandlePlayerAddedMessage(CSteamID senderId, PlayerAddedMessage message)
     {
-        // Only handle new players - skin changes go through PlayerGraphicsMessage
+        // Only handle new players - skin changes go through UpdateSkinMessage
         if (Get(message.ClientSteamId, message.PlayerIndex) != null) return;
 
         var isLocal = message.ClientSteamId == LocalClientId;
         var player = Add(message.ClientSteamId, message.PlayerIndex, message.PlayerName, isLocal);
         if (player == null) return;
 
-        // Apply skin if graphics provided
-        if (!isLocal && message.Graphics != null && !string.IsNullOrEmpty(message.Graphics.SkinId))
+        // Apply skin if provided (for lobby state sync)
+        if (!isLocal && !string.IsNullOrEmpty(message.SkinId))
         {
-            SetPlayerSkin(player, message.Graphics.SkinId);
-            var remotePlayer = PlayerSpawner.Instance?.GetRemotePlayer(player);
-            remotePlayer?.UpdateGraphics(message.Graphics);
+            player.SkinId = message.SkinId;
+            SpawnPlayerEntity(player);
         }
     }
 
@@ -315,19 +314,6 @@ public class PlayersController
         UmcLogger.Info($"Player '{player.Name}' added at slot {slot}{deviceInfo} (local={isLocal})");
 
         return player;
-    }
-
-    /// <summary>
-    /// Sets a player's skin and fires the OnPlayerSkinChanged event.
-    /// </summary>
-    public void SetPlayerSkin(UmcPlayer player, string skinId)
-    {
-        if (player == null) return;
-
-        UmcLogger.Info($"Player '{player.Name}' setting skin {skinId}");
-        var oldSkin = player.SkinId;
-        player.SkinId = skinId;
-        OnPlayerSkinChanged?.Invoke(player, oldSkin, skinId);
     }
 
     internal bool Remove(UmcPlayer player)

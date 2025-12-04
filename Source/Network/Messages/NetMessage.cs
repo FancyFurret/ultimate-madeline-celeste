@@ -166,7 +166,6 @@ public class PlayerGraphicsMessage : INetMessage
     public string[] Animations { get; set; } = Array.Empty<string>();
     public byte HairCount { get; set; }
     public Vector2[] HairScales { get; set; } = Array.Empty<Vector2>();
-    public string SkinId { get; set; }
 
     public void Serialize(BinaryWriter writer)
     {
@@ -178,7 +177,6 @@ public class PlayerGraphicsMessage : INetMessage
         foreach (var anim in Animations) writer.Write(anim ?? "");
         writer.Write(HairCount);
         for (int i = 0; i < HairCount && i < HairScales.Length; i++) writer.WriteScale(HairScales[i]);
-        writer.WriteNullableString(SkinId);
     }
 
     public void Deserialize(BinaryReader reader)
@@ -193,6 +191,23 @@ public class PlayerGraphicsMessage : INetMessage
         HairCount = reader.ReadByte();
         HairScales = new Vector2[HairCount];
         for (int i = 0; i < HairCount; i++) HairScales[i] = reader.ReadScale();
+    }
+}
+
+public class UpdateSkinMessage : INetMessage
+{
+    public int PlayerIndex { get; set; }
+    public string SkinId { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerIndex);
+        writer.WriteNullableString(SkinId);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerIndex = reader.ReadByte();
         SkinId = reader.ReadString();
     }
 }
@@ -220,15 +235,14 @@ public class PlayerAddedMessage : INetMessage
     public ulong ClientSteamId { get; set; }
     public int PlayerIndex { get; set; }
     public string PlayerName { get; set; }
-    public PlayerGraphicsMessage Graphics { get; set; }
+    public string SkinId { get; set; }
 
     public void Serialize(BinaryWriter writer)
     {
         writer.Write(ClientSteamId);
         writer.Write(PlayerIndex);
         writer.WriteNullableString(PlayerName);
-        writer.Write(Graphics != null);
-        Graphics?.Serialize(writer);
+        writer.WriteNullableString(SkinId);
     }
 
     public void Deserialize(BinaryReader reader)
@@ -236,11 +250,7 @@ public class PlayerAddedMessage : INetMessage
         ClientSteamId = reader.ReadUInt64();
         PlayerIndex = reader.ReadInt32();
         PlayerName = reader.ReadString();
-        if (reader.ReadBoolean())
-        {
-            Graphics = new PlayerGraphicsMessage();
-            Graphics.Deserialize(reader);
-        }
+        SkinId = reader.ReadString();
     }
 }
 

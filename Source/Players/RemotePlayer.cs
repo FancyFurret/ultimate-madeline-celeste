@@ -257,10 +257,7 @@ public class RemotePlayer : Entity
         Depth = graphics.Depth + 1;
         Sprite.Rate = graphics.SpriteRate;
 
-        // Apply skin if provided
-        if (!string.IsNullOrEmpty(graphics.SkinId))
-            ApplySkin(graphics.SkinId);
-        else if (Sprite.Mode != graphics.SpriteMode)
+        if (Sprite.Mode != graphics.SpriteMode)
             SetSpriteMode(graphics.SpriteMode);
 
         Graphics.AnimationIdToName.Clear();

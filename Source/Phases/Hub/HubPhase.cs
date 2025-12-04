@@ -49,12 +49,8 @@ public class HubPhase : Entity
         base.Added(scene);
         Instance = this;
 
-        // Set phase to Lobby
-        GameSession.Instance?.SetPhase(GamePhase.Lobby);
-
-        var players = GameSession.Instance?.Players;
-        _characterSelection = new CharacterSelection(scene, players);
-        _levelSelection = new LevelSelection(scene, players);
+        _characterSelection = new CharacterSelection(this);
+        _levelSelection = new LevelSelection(this, GameSession.Instance?.Players);
 
         scene.Add(new HubLobbyUi());
 

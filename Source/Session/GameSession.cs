@@ -1,4 +1,5 @@
 ﻿using System;
+using Celeste.Mod.UltimateMadelineCeleste.Phases;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 
@@ -19,9 +20,7 @@ public class GameSession
     public static bool Started => Instance != null;
 
     public PlayersController Players { get; } = new();
-    public GamePhase Phase { get; private set; } = GamePhase.Lobby;
-
-    public event Action<GamePhase> OnPhaseChanged;
+    public GamePhase Phase => PhaseManager.Instance.Phase;
 
     private GameSession() { }
 
@@ -44,13 +43,5 @@ public class GameSession
         Instance.Players.Clear();
         Instance = null;
         UmcLogger.Info("GameSession ended");
-    }
-
-    public void SetPhase(GamePhase phase)
-    {
-        if (Phase == phase) return;
-        Phase = phase;
-        UmcLogger.Info($"Game phase: {phase}");
-        OnPhaseChanged?.Invoke(phase);
     }
 }

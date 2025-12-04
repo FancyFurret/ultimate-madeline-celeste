@@ -88,7 +88,6 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
 
     public void SpawnAllSessionPlayers(Level level, Vector2? overrideSpawnPosition = null)
     {
-        UmcLogger.Info("SPAWNING ALL SESSION PLAYERS!!");
         var session = GameSession.Instance;
         if (session == null) return;
 

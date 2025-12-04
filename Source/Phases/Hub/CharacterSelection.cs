@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Celeste.Mod.SkinModHelper;
@@ -23,7 +22,7 @@ public class CharacterSelection
     private const float SelectionRadius = 40f;
     private const float NetworkSyncInterval = 0.05f;
 
-    private readonly Scene _scene;
+    private readonly HubPhase _hub;
     private readonly Dictionary<UmcPlayer, PlayerCursor> _localCursors = new();
     private readonly Dictionary<UmcPlayer, PlayerCursor> _remoteCursors = new();
     private readonly HashSet<UmcPlayer> _selectingPlayers = new();
@@ -31,31 +30,24 @@ public class CharacterSelection
     private readonly Dictionary<UmcPlayer, SkinPedestal> _claimedPedestals = new();
     private readonly Dictionary<UmcPlayer, Vector2> _spawnPositions = new();
     private float _networkSyncTimer;
-    private PlayersController _players;
 
     public bool IsSelecting => _selectingPlayers.Count > 0;
     public bool IsPlayerSelecting(UmcPlayer player) => _selectingPlayers.Contains(player);
     public Vector2? GetSpawnPosition(UmcPlayer player) => _spawnPositions.TryGetValue(player, out var pos) ? pos : null;
 
-    public CharacterSelection(Scene scene, PlayersController players)
+    public CharacterSelection(HubPhase hub)
     {
-        _scene = scene;
-        _players = players;
-
-        if (_players != null)
-            _players.OnPlayerSkinChanged += OnPlayerSkinChanged;
+        _hub = hub;
     }
 
     public void RegisterMessages(MessageRegistry messages)
     {
         messages.Register<CursorPositionMessage>(10, HandleCursorPosition);
+        messages.Register<UpdateSkinMessage>(11, HandleUpdateSkin);
     }
 
     public void Cleanup()
     {
-        if (_players != null)
-            _players.OnPlayerSkinChanged -= OnPlayerSkinChanged;
-        _players = null;
 
         foreach (var cursor in _localCursors.Values) cursor.RemoveSelf();
         foreach (var cursor in _remoteCursors.Values) cursor.RemoveSelf();
@@ -72,12 +64,24 @@ public class CharacterSelection
         _spawnPositions.Clear();
     }
 
-    private void OnPlayerSkinChanged(UmcPlayer player, string oldSkin, string newSkin)
+    /// <summary>
+    /// Called when a remote player's skin changes via network message.
+    /// </summary>
+    private void HandleUpdateSkin(CSteamID senderId, UpdateSkinMessage message)
     {
-        if (string.IsNullOrEmpty(newSkin))
+        var players = GameSession.Instance?.Players;
+        if (players == null) return;
+
+        var player = players.Get(senderId.m_SteamID, message.PlayerIndex);
+        if (player == null || player.IsLocal) return;
+
+        var oldSkin = player.SkinId;
+        player.SkinId = message.SkinId;
+
+        if (string.IsNullOrEmpty(message.SkinId))
             HandleSkinCleared(player, oldSkin);
         else
-            HandleSkinSelected(player, newSkin);
+            HandleSkinSelected(player, message.SkinId);
     }
 
     public void Update(Level level)
@@ -127,12 +131,12 @@ public class CharacterSelection
         ReleasePedestal(player);
         PlayerSpawner.Instance?.DespawnPlayer(player);
         StartSelection(player);
-        _players?.SetPlayerSkin(player, null);
+        player.SkinId = null;
 
         var net = NetworkManager.Instance;
         if (net?.IsOnline == true)
         {
-            net.Messages.Broadcast(new PlayerGraphicsMessage
+            net.Messages.Broadcast(new UpdateSkinMessage
             {
                 PlayerIndex = player.SlotIndex,
                 SkinId = null
@@ -194,7 +198,7 @@ public class CharacterSelection
         var cursor = new PlayerCursor(player);
         cursor.OnConfirm += () => OnCursorConfirm(player);
         cursor.OnCancel += () => ReturnToSelection(player);
-        _scene.Add(cursor);
+        _hub.Scene.Add(cursor);
         _localCursors[player] = cursor;
     }
 
@@ -205,7 +209,7 @@ public class CharacterSelection
         var cursor = new PlayerCursor(player);
         if (worldPosition.HasValue)
             cursor.SetWorldPosition(worldPosition.Value);
-        _scene.Add(cursor);
+        _hub.Scene.Add(cursor);
         _remoteCursors[player] = cursor;
     }
 
@@ -249,26 +253,24 @@ public class CharacterSelection
         var net = NetworkManager.Instance;
         if (net?.IsOnline != true) return;
 
-        var spawner = PlayerSpawner.Instance;
-        var stateSync = PlayerStateSync.Instance;
-        var playerEntity = spawner?.GetLocalPlayer(player);
-
-        if (playerEntity != null && stateSync != null)
-            stateSync.SendPlayerGraphics(player, playerEntity);
+        net.Messages.Broadcast(new UpdateSkinMessage
+        {
+            PlayerIndex = player.SlotIndex,
+            SkinId = player.SkinId
+        });
     }
 
     private void SpawnPlayerAfterSelection(UmcPlayer player)
     {
-        var level = _scene as Level;
         var spawner = PlayerSpawner.Instance;
-        if (level == null || spawner == null) return;
+        if (spawner == null) return;
 
         if (player.IsLocal && !string.IsNullOrEmpty(player.SkinId))
         {
             if (spawner.GetLocalPlayer(player) == null)
             {
                 var spawnPos = GetSpawnPosition(player);
-                spawner.SpawnLocalPlayer(level, player, spawnPos);
+                spawner.SpawnLocalPlayer(_hub.Scene as Level, player, spawnPos);
             }
         }
     }
@@ -291,10 +293,7 @@ public class CharacterSelection
 
     private void EnsureAvailablePedestal()
     {
-        var level = _scene as Level;
-        if (level == null) return;
-
-        var pedestals = level.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>().ToList();
+        var pedestals = _hub.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>().ToList();
         if (pedestals.Any(p => p.Active && p.Visible)) return;
 
         var defaultPedestal = pedestals.FirstOrDefault(p => p.SkinName == SkinsSystem.DEFAULT);
@@ -368,7 +367,9 @@ public class CharacterSelection
 
         // Spawn remote player if needed
         if (!player.IsLocal)
-            PlayerSpawner.Instance?.SpawnRemotePlayer(_scene as Level, player);
+        {
+            PlayerSpawner.Instance?.SpawnRemotePlayer(_hub.Scene as Level, player);
+        }
     }
 
     private void HandleSkinCleared(UmcPlayer player, string oldSkinId)
@@ -401,10 +402,7 @@ public class CharacterSelection
 
     private SkinPedestal FindAndClaimPedestalBySkin(string skinName)
     {
-        var level = _scene as Level;
-        if (level == null) return null;
-
-        foreach (var pedestal in level.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
+        foreach (var pedestal in _hub.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
         {
             if (pedestal.SkinName == skinName && pedestal.Active && pedestal.Visible)
             {
@@ -422,10 +420,7 @@ public class CharacterSelection
 
     private void ReleasePedestalBySkin(string skinName)
     {
-        var level = _scene as Level;
-        if (level == null) return;
-
-        foreach (var pedestal in level.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
+        foreach (var pedestal in _hub.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
         {
             if (pedestal.SkinName == skinName && !pedestal.Active)
             {

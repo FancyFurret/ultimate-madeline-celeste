@@ -89,7 +89,7 @@ public class PlayingPhase : Entity
         messages.Register<ReturnToLobbyMessage>(23, HandleReturnToLobby);
     }
 
-    private PlayerDeadBody OnPlayerDie(On.Celeste.Player.orig_Die orig, Player self, Vector2 direction, bool evenIfInvincible, bool registerDeathInStats)
+    private static PlayerDeadBody OnPlayerDie(On.Celeste.Player.orig_Die orig, Player self, Vector2 direction, bool evenIfInvincible, bool registerDeathInStats)
     {
         var spawner = PlayerSpawner.Instance;
         var umcPlayer = spawner?.GetUmcPlayer(self);
@@ -105,14 +105,14 @@ public class PlayingPhase : Entity
         if (deadBody == null) return deadBody;
 
         // Track this dead body so we can intercept its End call
-        _managedDeadBodies.Add(deadBody);
+        Instance._managedDeadBodies.Add(deadBody);
 
         // Record the death
-        Round?.RecordPlayerDeath(umcPlayer);
+        Instance.Round?.RecordPlayerDeath(umcPlayer);
         UmcLogger.Info($"Player {umcPlayer.Name} died, will respawn in {RespawnDelay}s");
 
         // Queue respawn after delay
-        _pendingRespawns[umcPlayer] = RespawnDelay;
+        Instance._pendingRespawns[umcPlayer] = RespawnDelay;
 
         return deadBody;
     }

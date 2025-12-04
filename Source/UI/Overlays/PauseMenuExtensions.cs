@@ -225,15 +225,5 @@ public static class PauseMenuExtensions
             Audio.Play("event:/ui/main/button_select");
         });
         menu.Add(inviteButton);
-
-        // Leave online session button
-        var leaveButton = new TextMenu.Button("Leave Online");
-        leaveButton.Pressed(() =>
-            {
-                leaveButton.Label = "Leaving...";
-                controller?.LeaveSession();
-                Audio.Play("event:/ui/main/button_back");
-            });
-        menu.Add(leaveButton);
     }
 }

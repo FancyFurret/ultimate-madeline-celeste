@@ -142,37 +142,16 @@ public class LobbyController
         var session = GameSession.Instance;
         if (session == null) return;
 
-        var spawner = PlayerSpawner.Instance;
-        var stateSync = PlayerStateSync.Instance;
-
         var playerMessages = new List<PlayerAddedMessage>();
         foreach (var p in session.Players.All)
         {
-            var msg = new PlayerAddedMessage
+            playerMessages.Add(new PlayerAddedMessage
             {
                 ClientSteamId = p.ClientId,
                 PlayerIndex = p.SlotIndex,
-                PlayerName = p.Name
-            };
-
-            // Include graphics for all players (local and remote)
-            if (spawner != null && stateSync != null)
-            {
-                if (p.IsLocal)
-                {
-                    var playerEntity = spawner.GetLocalPlayer(p);
-                    if (playerEntity != null)
-                        msg.Graphics = stateSync.BuildPlayerGraphics(p, playerEntity);
-                }
-                else
-                {
-                    var remotePlayer = spawner.GetRemotePlayer(p);
-                    if (remotePlayer != null)
-                        msg.Graphics = stateSync.BuildRemotePlayerGraphics(p, remotePlayer);
-                }
-            }
-
-            playerMessages.Add(msg);
+                PlayerName = p.Name,
+                SkinId = p.SkinId
+            });
         }
 
         var message = new LobbyStateMessage { Players = playerMessages };
@@ -192,7 +171,6 @@ public class LobbyController
         UmcLogger.Info($"Received lobby state: {message.Players.Count} players");
 
         var players = GameSession.Instance?.Players;
-        var spawner = PlayerSpawner.Instance;
         if (players == null) return;
 
         players.Clear();
@@ -204,13 +182,12 @@ public class LobbyController
 
             if (player == null) continue;
 
-            players.SetPlayerSkin(player, playerInfo.Graphics?.SkinId);
-
-            // Apply additional graphics if provided
-            if (!isLocal && playerInfo.Graphics != null)
+            // Set skin ID and spawn remote player if they have a skin selected
+            if (!isLocal && !string.IsNullOrEmpty(playerInfo.SkinId))
             {
-                var remotePlayer = spawner?.GetRemotePlayer(player);
-                remotePlayer?.UpdateGraphics(playerInfo.Graphics);
+                player.SkinId = playerInfo.SkinId;
+                UmcLogger.Info("ADDING ENTTIY FRO LOBBY STATE PLY");
+                players.SpawnPlayerEntity(player);
             }
         }
     }

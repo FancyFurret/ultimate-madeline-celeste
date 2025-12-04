@@ -14,12 +14,10 @@ public class PhaseManager
 {
     public static PhaseManager Instance { get; private set; }
 
+    public GamePhase Phase { get; private set; } = GamePhase.Lobby;
+
     private const string HubStageId = "FancyFurret/UltimateMadelineCeleste/Hub";
 
-    /// <summary>
-    /// The map SID to load when transitioning to Playing phase.
-    /// Set before the level transition occurs.
-    /// </summary>
     public string PendingLevelSID { get; set; }
 
     public PhaseManager()
@@ -67,20 +65,20 @@ public class PhaseManager
         if (isHub)
         {
             // Entering hub - ensure we're in Lobby phase
-            EnsurePhase<HubPhase>(level, GamePhase.Lobby);
+            EnsurePhaseEntity<HubPhase>(level, GamePhase.Lobby);
         }
         else if (session.Phase == GamePhase.Playing)
         {
             // Entering a gameplay level while in Playing phase
-            var levelSID = PendingLevelSID ?? sid;
+            var levelSid = PendingLevelSID ?? sid;
             PendingLevelSID = null;
-            EnsurePhase<PlayingPhase>(level, GamePhase.Playing, levelSID);
+            EnsurePhaseEntity<PlayingPhase>(level, GamePhase.Playing, levelSid);
         }
         else
         {
             // Loading a non-hub UMC level but not in Playing phase - redirect to hub
             UmcLogger.Info($"Entered UMC level '{sid}' outside Playing phase - redirecting to hub");
-            session.SetPhase(GamePhase.Lobby);
+            Phase = GamePhase.Lobby;
 
             // Schedule redirect after this frame completes
             level.OnEndOfFrame += () =>
@@ -96,7 +94,7 @@ public class PhaseManager
         orig(level, playerIntro, isFromLoader);
     }
 
-    private void EnsurePhase<T>(Level level, GamePhase expectedPhase, string levelSID = null) where T : Entity
+    private void EnsurePhaseEntity<T>(Level level, GamePhase expectedPhase, string levelSid = null) where T : Entity
     {
         var existing = level.Entities.FindFirst<T>();
         if (existing != null)
@@ -105,7 +103,7 @@ public class PhaseManager
         Entity phase = typeof(T) switch
         {
             var t when t == typeof(HubPhase) => new HubPhase(),
-            var t when t == typeof(PlayingPhase) => new PlayingPhase(levelSID ?? level.Session.Area.SID),
+            var t when t == typeof(PlayingPhase) => new PlayingPhase(levelSid ?? level.Session.Area.SID),
             _ => null
         };
 
@@ -119,21 +117,20 @@ public class PhaseManager
     /// <summary>
     /// Transitions to a new level with the Playing phase.
     /// </summary>
-    public void TransitionToLevel(string mapSID)
+    public void TransitionToLevel(string mapSid)
     {
-        PendingLevelSID = mapSID;
-        GameSession.Instance?.SetPhase(GamePhase.Playing);
+        PendingLevelSID = mapSid;
+        Phase = GamePhase.Playing;
 
-        var areaData = AreaData.Get(mapSID);
+        var areaData = AreaData.Get(mapSid);
         if (areaData == null)
         {
-            UmcLogger.Error($"Failed to find area data for: {mapSID}");
+            UmcLogger.Error($"Failed to find area data for: {mapSid}");
             PendingLevelSID = null;
             return;
         }
 
-        var level = Engine.Scene as Level;
-        if (level != null)
+        if (Engine.Scene is Level level)
         {
             level.OnEndOfFrame += () =>
             {
@@ -147,10 +144,9 @@ public class PhaseManager
     /// </summary>
     public void TransitionToLobby()
     {
-        GameSession.Instance?.SetPhase(GamePhase.Lobby);
+        Phase = GamePhase.Playing;
 
-        var level = Engine.Scene as Level;
-        if (level != null)
+        if (Engine.Scene is Level level)
         {
             level.OnEndOfFrame += () =>
             {

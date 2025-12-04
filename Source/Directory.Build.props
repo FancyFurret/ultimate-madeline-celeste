@@ -1,5 +1,6 @@
 <Project>
     <PropertyGroup>
          <CelestePrefix>G:\Games\Steam\steamapps\common\Celeste\</CelestePrefix> 
+<!--         <CelestePrefix>C:\Program Files (x86)\Steam\steamapps\common\Celeste\</CelestePrefix>-->
     </PropertyGroup>
 </Project>
