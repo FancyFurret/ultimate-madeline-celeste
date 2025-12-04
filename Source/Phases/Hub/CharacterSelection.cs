@@ -142,6 +142,15 @@ public class CharacterSelection
         Audio.Play("event:/ui/main/button_back");
     }
 
+    public void CancelSelection(UmcPlayer player)
+    {
+        if (!_selectingPlayers.Contains(player)) return;
+
+        _selectingPlayers.Remove(player);
+        RemoveCursor(player);
+        _hoveredPedestals.Remove(player);
+    }
+
     public void ReleasePedestal(UmcPlayer player)
     {
         if (_claimedPedestals.TryGetValue(player, out var pedestal))
@@ -163,7 +172,7 @@ public class CharacterSelection
             var cursor = kvp.Value;
             if (!_selectingPlayers.Contains(player)) continue;
 
-            Vector2 worldPos = cursor.GetWorldPosition(level);
+            Vector2 worldPos = cursor.GetWorldPosition();
             SkinPedestal closest = null;
             float closestDist = SelectionRadius;
 
@@ -182,35 +191,34 @@ public class CharacterSelection
     {
         if (_localCursors.ContainsKey(player)) return;
 
-        var cursor = new PlayerCursor(player, GetSpawnScreenPosition());
+        var cursor = new PlayerCursor(player);
         cursor.OnConfirm += () => OnCursorConfirm(player);
         cursor.OnCancel += () => ReturnToSelection(player);
         _scene.Add(cursor);
         _localCursors[player] = cursor;
     }
 
-    private void CreateRemoteCursor(UmcPlayer player)
+    private void CreateRemoteCursor(UmcPlayer player, Vector2? worldPosition = null)
     {
         if (_remoteCursors.ContainsKey(player)) return;
 
-        var cursor = new PlayerCursor(player, GetSpawnScreenPosition());
+        var cursor = new PlayerCursor(player);
+        if (worldPosition.HasValue)
+            cursor.SetWorldPosition(worldPosition.Value);
         _scene.Add(cursor);
         _remoteCursors[player] = cursor;
     }
 
-    private Vector2 GetSpawnScreenPosition()
+    private Vector2 GetSpawnWorldPosition()
     {
         var level = _scene as Level;
-        if (level == null) return new Vector2(960f, 540f);
+        if (level == null) return new Vector2(160, 90);
 
         Vector2 worldSpawn = level.Session.RespawnPoint ?? new Vector2(160, 90);
         var playerData = level.Session.LevelData?.Entities?.FirstOrDefault(e => e.Name == "player");
         if (playerData != null) worldSpawn = new Vector2(playerData.Position.X, playerData.Position.Y);
 
-        const float screenScale = 1920f / 320f;
-        Vector2 gameScreenPos = (worldSpawn - level.Camera.Position) * level.Zoom;
-        Vector2 screenPos = gameScreenPos * screenScale;
-        return new Vector2(Math.Clamp(screenPos.X, 50f, 1870f), Math.Clamp(screenPos.Y, 50f, 1030f));
+        return worldSpawn;
     }
 
     private void OnCursorConfirm(UmcPlayer player)
@@ -230,8 +238,13 @@ public class CharacterSelection
         player.SkinId = skinName;
         _claimedPedestals[player] = pedestal;
         _spawnPositions[player] = pedestal.Position;
-        pedestal.Visible = false;
-        pedestal.Active = false;
+
+        // Only hide non-default pedestals - default/Madeline should always be available
+        if (skinName != SkinsSystem.DEFAULT)
+        {
+            pedestal.Visible = false;
+            pedestal.Active = false;
+        }
         _selectingPlayers.Remove(player);
 
         RemoveCursor(player);
@@ -323,7 +336,7 @@ public class CharacterSelection
             net.Messages.Broadcast(new CursorPositionMessage
             {
                 PlayerIndex = kvp.Key.SlotIndex,
-                ScreenPosition = kvp.Value.ScreenPosition
+                WorldPosition = kvp.Value.GetWorldPosition()
             }, SendMode.Unreliable);
         }
     }
@@ -339,17 +352,13 @@ public class CharacterSelection
         if (!_remoteCursors.ContainsKey(player) && string.IsNullOrEmpty(player.SkinId))
         {
             _selectingPlayers.Add(player);
-            CreateRemoteCursor(player);
+            CreateRemoteCursor(player, message.WorldPosition);
         }
 
         if (_remoteCursors.TryGetValue(player, out var cursor))
-            cursor.SetPosition(message.ScreenPosition);
+            cursor.SetWorldPosition(message.WorldPosition);
     }
 
-    /// <summary>
-    /// Called when a player selects a skin (via OnSkinChanged event).
-    /// Handles pedestal claiming and cursor cleanup.
-    /// </summary>
     private void HandleSkinSelected(UmcPlayer player, string skinId)
     {
         if (player == null) return;
@@ -374,9 +383,6 @@ public class CharacterSelection
             PlayerSpawner.Instance?.SpawnRemotePlayer(_scene as Level, player);
     }
 
-    /// <summary>
-    /// Called when a player's skin is cleared (returning to selection).
-    /// </summary>
     private void HandleSkinCleared(UmcPlayer player, string oldSkinId)
     {
         if (player == null) return;
@@ -414,8 +420,12 @@ public class CharacterSelection
         {
             if (pedestal.SkinName == skinName && pedestal.Active && pedestal.Visible)
             {
-                pedestal.Visible = false;
-                pedestal.Active = false;
+                // Only hide non-default pedestals - default/Madeline should always be available
+                if (skinName != SkinsSystem.DEFAULT)
+                {
+                    pedestal.Visible = false;
+                    pedestal.Active = false;
+                }
                 return pedestal;
             }
         }

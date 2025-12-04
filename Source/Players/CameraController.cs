@@ -192,7 +192,7 @@ public class CameraController : HookedFeature<CameraController>
 
             var cursors = level.Entities.OfType<PlayerCursor>().Where(c => c.IsActive);
             foreach (var cursor in cursors)
-                positions.Add(cursor.GetWorldPosition(level));
+                positions.Add(cursor.GetWorldPosition());
         }
 
         return positions;

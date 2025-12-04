@@ -273,9 +273,9 @@ public class PlayerEventMessage : INetMessage
 public class CursorPositionMessage : INetMessage
 {
     public int PlayerIndex { get; set; }
-    public Vector2 ScreenPosition { get; set; }
-    public void Serialize(BinaryWriter writer) { writer.Write((byte)PlayerIndex); writer.Write((ushort)Math.Clamp(ScreenPosition.X, 0, 1920)); writer.Write((ushort)Math.Clamp(ScreenPosition.Y, 0, 1080)); }
-    public void Deserialize(BinaryReader reader) { PlayerIndex = reader.ReadByte(); ScreenPosition = new(reader.ReadUInt16(), reader.ReadUInt16()); }
+    public Vector2 WorldPosition { get; set; }
+    public void Serialize(BinaryWriter writer) { writer.Write((byte)PlayerIndex); writer.Write(WorldPosition.X); writer.Write(WorldPosition.Y); }
+    public void Deserialize(BinaryReader reader) { PlayerIndex = reader.ReadByte(); WorldPosition = new(reader.ReadSingle(), reader.ReadSingle()); }
 }
 
 // Level voting messages

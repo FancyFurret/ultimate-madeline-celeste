@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
@@ -6,7 +7,6 @@ using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Input;
 using Monocle;
 
 namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
@@ -19,9 +19,8 @@ public class HubPhase : Entity
     public static HubPhase Instance { get; private set; }
 
     private const string HubStageId = "FancyFurret/UltimateMadelineCeleste/Hub";
-    private const float LeaveHoldDuration = 0.5f;
 
-    private readonly Dictionary<int, float> _leaveHoldTimes = new();
+    private readonly Dictionary<int, HoldAction> _activeHoldActions = new();
     private CharacterSelection _characterSelection;
     private LevelSelection _levelSelection;
 
@@ -34,6 +33,11 @@ public class HubPhase : Entity
     public bool IsLevelTransitioning { get; set; }
     public bool IsPlayerSelecting(UmcPlayer player) => _characterSelection?.IsPlayerSelecting(player) ?? false;
     public Vector2? GetSpawnPosition(UmcPlayer player) => _characterSelection?.GetSpawnPosition(player);
+
+    /// <summary>
+    /// Gets the active hold action for a player slot, if any.
+    /// </summary>
+    public HoldAction GetHoldAction(int slotIndex) => _activeHoldActions.GetValueOrDefault(slotIndex);
 
     public HubPhase()
     {
@@ -93,7 +97,7 @@ public class HubPhase : Entity
         _characterSelection = null;
         _levelSelection?.Cleanup();
         _levelSelection = null;
-        _leaveHoldTimes.Clear();
+        _activeHoldActions.Clear();
 
         if (Instance == this) Instance = null;
     }
@@ -108,9 +112,11 @@ public class HubPhase : Entity
         var level = Scene as Level;
         if (level == null || level.Paused) return;
 
+        // Check for pause input from any local player (needed when no Player entities exist)
+        CheckPauseInput(level, session);
+
         UpdateJoinInput(session);
-        UpdateLeaveInput(session);
-        UpdateBackToSelection(session);
+        UpdateHoldActions(session);
         _characterSelection?.Update(level);
         _characterSelection?.CleanupRemovedPlayers(session);
 
@@ -121,7 +127,20 @@ public class HubPhase : Entity
         }
     }
 
-    #region Player Join/Leave
+    /// <summary>
+    /// Checks for pause input directly. This is needed because when no Player
+    /// entities are spawned, the normal pause handling doesn't work.
+    /// </summary>
+    private void CheckPauseInput(Level level, GameSession session)
+    {
+        if (level.Tracker.GetEntity<Player>() != null) return;
+
+        if (Input.ESC.Pressed)
+        {
+            Input.ESC.ConsumePress();
+            level.Pause();
+        }
+    }
 
     private void UpdateJoinInput(GameSession session)
     {
@@ -141,69 +160,95 @@ public class HubPhase : Entity
         }
     }
 
-    private void UpdateLeaveInput(GameSession session)
+    private void UpdateHoldActions(GameSession session)
     {
-        if (IsLevelTransitioning) return;
+        if (IsLevelTransitioning)
+        {
+            _activeHoldActions.Clear();
+            return;
+        }
 
+        // Update existing hold actions
+        var completedSlots = new List<int>();
+        foreach (var kvp in _activeHoldActions)
+        {
+            var action = kvp.Value;
+            if (!action.IsStillHolding())
+            {
+                completedSlots.Add(kvp.Key);
+                continue;
+            }
+
+            if (action.Update())
+            {
+                completedSlots.Add(kvp.Key);
+            }
+        }
+
+        foreach (var slot in completedSlots)
+            _activeHoldActions.Remove(slot);
+
+        // Check for new hold actions
         foreach (var player in session.Players.All)
         {
             if (!player.IsLocal || player.Device == null) continue;
-            if (IsPlayerSelecting(player)) continue;
+            if (_activeHoldActions.ContainsKey(player.SlotIndex)) continue;
 
-            if (IsHoldingLeaveButton(player))
+            // Check if player started holding the leave button
+            if (IsStartingHold(player, UmcModule.Settings.ButtonLeave))
             {
-                _leaveHoldTimes.TryAdd(player.SlotIndex, 0f);
-                _leaveHoldTimes[player.SlotIndex] += Engine.DeltaTime;
+                // When selecting a character, allow leaving directly
+                // When spawned (has skin), go back to selection first
+                var actionType = IsPlayerSelecting(player) || string.IsNullOrEmpty(player.SkinId)
+                    ? HoldActionType.Leave
+                    : HoldActionType.BackToSelection;
 
-                if (_leaveHoldTimes[player.SlotIndex] >= LeaveHoldDuration)
-                {
-                    _leaveHoldTimes.Remove(player.SlotIndex);
-                    _characterSelection?.ReleasePedestal(player);
-                    session.Players.RemoveLocalPlayer(player);
-                    break;
-                }
-            }
-            else
-            {
-                _leaveHoldTimes.Remove(player.SlotIndex);
+                var capturedPlayer = player;
+                _activeHoldActions[player.SlotIndex] = new HoldAction(
+                    player,
+                    actionType,
+                    UmcModule.Settings.ButtonLeave,
+                    () => ExecuteHoldAction(session, capturedPlayer, actionType)
+                );
             }
         }
     }
 
-    private void UpdateBackToSelection(GameSession session)
+    private void ExecuteHoldAction(GameSession session, UmcPlayer player, HoldActionType actionType)
     {
-        if (IsLevelTransitioning) return;
-
-        foreach (var player in session.Players.All)
+        switch (actionType)
         {
-            if (!player.IsLocal || player.Device == null) continue;
-            if (IsPlayerSelecting(player)) continue;
-            if (string.IsNullOrEmpty(player.SkinId)) continue;
+            case HoldActionType.Leave:
+                _characterSelection?.CancelSelection(player);
+                _characterSelection?.ReleasePedestal(player);
+                session.Players.RemoveLocalPlayer(player);
+                break;
 
-            if (IsPressingBackButton(player))
-            {
+            case HoldActionType.BackToSelection:
                 _characterSelection?.ReturnToSelection(player);
                 break;
-            }
+
+            case HoldActionType.GiveUp:
+                // Future implementation
+                break;
         }
     }
 
-    private static bool IsHoldingLeaveButton(UmcPlayer player)
+    private static bool IsStartingHold(UmcPlayer player, ButtonBinding binding)
     {
         if (player.Device == null) return false;
+
         if (player.Device.Type == InputDeviceType.Keyboard)
-            return MInput.Keyboard.Check(Keys.K);
-        return MInput.GamePads[player.Device.ControllerIndex].Check(Buttons.Back);
-    }
+        {
+            foreach (var key in binding.Keys)
+                if (MInput.Keyboard.Pressed(key)) return true;
+            return false;
+        }
 
-    private static bool IsPressingBackButton(UmcPlayer player)
-    {
-        if (player.Device == null) return false;
-        var playerEntity = PlayerSpawner.Instance?.GetLocalPlayer(player);
-        var controller = playerEntity?.Get<LocalPlayerController>();
-        return controller?.PlayerInput?.MenuCancel.Pressed ?? false;
+        var gamepad = MInput.GamePads[player.Device.ControllerIndex];
+        foreach (var button in binding.Buttons)
+            if (gamepad.Pressed(button)) return true;
+        return false;
     }
-
-    #endregion
 }
 

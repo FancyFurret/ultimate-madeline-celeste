@@ -373,28 +373,72 @@ public class PlayersController
         return localIndex == 0 ? baseName : $"{baseName} ({localIndex + 1})";
     }
 
-    /// <summary>
-    /// Detects which input device pressed join. Returns null if no join input or device already taken.
-    /// </summary>
     public InputDevice DetectJoinInput()
     {
-        if (MInput.Keyboard.Pressed(Keys.J))
+        var binding = UmcModule.Settings.ButtonJoin;
+
+        // Check keyboard
+        foreach (var key in binding.Keys)
         {
-            var keyboardDevice = InputDevice.Keyboard;
-            if (!IsDeviceTaken(keyboardDevice))
-                return keyboardDevice;
+            if (MInput.Keyboard.Pressed(key))
+            {
+                var keyboardDevice = InputDevice.Keyboard;
+                if (!IsDeviceTaken(keyboardDevice))
+                    return keyboardDevice;
+            }
         }
 
+        // Check controllers
         for (var i = 0; i < 4; i++)
         {
             var gamepad = MInput.GamePads[i];
             if (!gamepad.Attached) continue;
 
-            if (gamepad.Pressed(Buttons.A) || gamepad.Pressed(Buttons.Start))
+            foreach (var button in binding.Buttons)
             {
-                var controllerDevice = InputDevice.Controller(i);
-                if (!IsDeviceTaken(controllerDevice))
-                    return controllerDevice;
+                if (gamepad.Pressed(button))
+                {
+                    var controllerDevice = InputDevice.Controller(i);
+                    if (!IsDeviceTaken(controllerDevice))
+                        return controllerDevice;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public UmcPlayer DetectLeaveInput()
+    {
+        var binding = UmcModule.Settings.ButtonLeave;
+
+        // Check keyboard
+        foreach (var key in binding.Keys)
+        {
+            if (MInput.Keyboard.Pressed(key))
+            {
+                var keyboardDevice = InputDevice.Keyboard;
+                var player = Local.FirstOrDefault(p => p.Device?.Equals(keyboardDevice) == true);
+                if (player != null)
+                    return player;
+            }
+        }
+
+        // Check controllers
+        for (var i = 0; i < 4; i++)
+        {
+            var gamepad = MInput.GamePads[i];
+            if (!gamepad.Attached) continue;
+
+            foreach (var button in binding.Buttons)
+            {
+                if (gamepad.Pressed(button))
+                {
+                    var controllerDevice = InputDevice.Controller(i);
+                    var player = Local.FirstOrDefault(p => p.Device?.Equals(controllerDevice) == true);
+                    if (player != null)
+                        return player;
+                }
             }
         }
 

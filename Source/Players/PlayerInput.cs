@@ -24,6 +24,7 @@ public class PlayerInput
     public VirtualJoystick MountainAim { get; private set; }
     public VirtualButton MenuConfirm { get; private set; }
     public VirtualButton MenuCancel { get; private set; }
+    public VirtualButton CursorSprint { get; private set; }
 
     public InputDevice Device { get; }
 
@@ -52,6 +53,7 @@ public class PlayerInput
 
         MenuConfirm = Input.MenuConfirm.Clone(gamepadIndex, deviceType);
         MenuCancel = Input.MenuCancel.Clone(gamepadIndex, deviceType);
+        CursorSprint = UmcModule.Settings.ButtonCursorSprint.Button.Clone(gamepadIndex, deviceType);
     }
 
     public void Deregister()
@@ -69,5 +71,6 @@ public class PlayerInput
         MountainAim?.Deregister();
         MenuConfirm?.Deregister();
         MenuCancel?.Deregister();
+        CursorSprint?.Deregister();
     }
 }
