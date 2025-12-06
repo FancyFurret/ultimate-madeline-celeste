@@ -30,6 +30,7 @@ public class NetworkManager
     private SteamTransport _steamTransport;
     private LobbyController _lobbyController;
     private PlayerStateSync _playerStateSync;
+    private NetworkedEntityRegistry _entityRegistry = new();
 
     public event Action OnConnected;
     public event Action OnDisconnected;
@@ -67,13 +68,14 @@ public class NetworkManager
                 {
                     var host = _steamLobby?.LobbyMembers.Find(m => m.IsHost);
                     return host != null ? new CSteamID(host.SteamId.m_SteamID) : null;
-                }
+                },
+                getLocalId: () => SteamManager.LocalSteamId
             );
 
             _steamTransport.OnDataReceived += (sender, data) => Messages.HandleRawMessage(sender, data);
             _steamTransport.OnPeerDisconnected += HandlePeerDisconnected;
 
-            _playerStateSync.RegisterMessages(Messages);
+            _entityRegistry.Initialize(Messages);
 
             UmcLogger.Info("NetworkManager initialized with Steam");
         }
@@ -85,6 +87,7 @@ public class NetworkManager
 
     public void Unload()
     {
+        _entityRegistry?.Shutdown();
         _lobbyController?.Shutdown(_steamLobby);
         _steamLobby?.Shutdown();
         _steamTransport?.Shutdown();
@@ -118,8 +121,6 @@ public class NetworkManager
 
         UmcLogger.Info("Starting local session");
         GameSession.Start();
-        GameSession.Instance.Players.RegisterMessages(Messages);
-        LobbyController.Instance.RegisterMessages(Messages);
         OnConnected?.Invoke();
     }
 
@@ -131,6 +132,7 @@ public class NetworkManager
             StartLocalSession();
             return;
         }
+
         _lobbyController.HostOnlineGame();
     }
 
@@ -148,6 +150,7 @@ public class NetworkManager
     {
         if (!IsActive) return;
         UmcLogger.Info("Leaving session...");
+        _entityRegistry?.ClearAllEntities();
         _lobbyController.LeaveLobby();
         GameSession.End();
     }
@@ -156,5 +159,28 @@ public class NetworkManager
     {
         GameSession.Instance?.Players.HandleClientLeft(steamId.m_SteamID);
         Messages.ClearPeerState(steamId);
+
+        UmcLogger.Info($"Removing entities owned by disconnected client: {steamId.m_SteamID}");
+        _entityRegistry?.RemoveEntitiesOwnedBy(steamId.m_SteamID);
     }
+
+    // Static convenience methods
+    public static void SendTo<T>(T message, CSteamID target, SendMode mode = SendMode.Reliable) where T : INetMessage
+        => Instance?.Messages.SendTo(message, target, mode);
+
+    public static void Broadcast<T>(T message, SendMode mode = SendMode.Reliable) where T : INetMessage
+        => Instance?.Messages.Broadcast(message, mode);
+
+    public static void SendToHost<T>(T message, SendMode mode = SendMode.Reliable) where T : INetMessage
+        => Instance?.Messages.SendToHost(message, mode);
+
+    public static void BroadcastWithSelf<T>(T message, SendMode mode = SendMode.Reliable) where T : INetMessage
+        => Instance?.Messages.BroadcastWithSelf(message, mode);
+
+    public static void Handle<T>(Action<T> handler, bool checkTimestamp = false) where T : INetMessage, new()
+        => Instance?.Messages.Handle(handler, checkTimestamp);
+
+    public static void Handle<T>(Action<CSteamID, T> handler, bool checkTimestamp = false)
+        where T : INetMessage, new()
+        => Instance?.Messages.Handle(handler, checkTimestamp);
 }

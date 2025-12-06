@@ -5,6 +5,7 @@ using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
+using Celeste.Mod.UltimateMadelineCeleste.UI.Overlays;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -49,16 +50,23 @@ public class HubPhase : Entity
         base.Added(scene);
         Instance = this;
 
-        _characterSelection = new CharacterSelection(this);
+        _characterSelection = new CharacterSelection(this, scene);
         _levelSelection = new LevelSelection(this, GameSession.Instance?.Players);
 
         scene.Add(new HubLobbyUi());
+        scene.Add(new ConnectingOverlay());
 
-        var net = NetworkManager.Instance;
-        if (net != null)
+        var lobby = LobbyController.Instance;
+        var session = GameSession.Instance;
+
+        // Only request lobby state if we're a new client without player data
+        // (returning from playing phase means we already have the data)
+        bool needsLobbyState = lobby != null && lobby.IsOnline && !lobby.IsHost
+            && (session?.Players.All.Count == 0 || session?.Players.All.All(p => string.IsNullOrEmpty(p.SkinId)) == true);
+
+        if (needsLobbyState)
         {
-            _characterSelection.RegisterMessages(net.Messages);
-            _levelSelection.RegisterMessages(net.Messages);
+            lobby.RequestLobbyState();
         }
 
         // Spawn all session players who have skins selected
@@ -90,6 +98,10 @@ public class HubPhase : Entity
 
         var level = Scene as Level;
         if (level == null || level.Paused) return;
+
+        // Don't process anything while waiting for lobby state
+        if (LobbyController.Instance?.IsWaitingForLobbyState == true)
+            return;
 
         // Check for pause input from any local player (needed when no Player entities exist)
         CheckPauseInput(level, session);

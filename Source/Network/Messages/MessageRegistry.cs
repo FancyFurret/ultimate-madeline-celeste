@@ -11,29 +11,51 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 /// </summary>
 public class MessageRegistry
 {
-    private readonly Dictionary<byte, MessageRegistration> _idToRegistration = new();
+    private readonly Dictionary<byte, MessageRegistration> _idToHandler = new();
     private readonly Dictionary<Type, byte> _typeToId = new();
     private readonly Dictionary<CSteamID, double> _lastTimestamps = new();
 
     private Action<CSteamID, byte[], SendMode> _sendToClient;
     private Action<byte[], SendMode> _broadcast;
     private Func<CSteamID?> _getHostId;
+    private Func<CSteamID> _getLocalId;
 
-    public void Configure(Action<CSteamID, byte[], SendMode> sendToClient, Action<byte[], SendMode> broadcast, Func<CSteamID?> getHostId)
+    private byte _nextId;
+
+    public void Configure(Action<CSteamID, byte[], SendMode> sendToClient, Action<byte[], SendMode> broadcast, Func<CSteamID?> getHostId, Func<CSteamID> getLocalId)
     {
         _sendToClient = sendToClient;
         _broadcast = broadcast;
         _getHostId = getHostId;
+        _getLocalId = getLocalId;
     }
 
-    public void Register<T>(byte typeId, Action<CSteamID, T> handler, bool checkTimestamp = false) where T : INetMessage, new()
+    public void Register<T>() where T : INetMessage, new()
     {
-        if (_idToRegistration.ContainsKey(typeId))
-        {
-            // throw new InvalidOperationException($"Message type ID {typeId} already registered");
-        }
+        _typeToId[typeof(T)] = _nextId++;
+    }
 
-        _idToRegistration[typeId] = new MessageRegistration
+    public void Handle<T>(Action<T> handler, bool checkTimestamp = false) where T : INetMessage, new()
+    {
+        if (!_typeToId.TryGetValue(typeof(T), out var typeId))
+            throw new Exception($"Message type {typeof(T).Name} has not been registered");
+
+        _idToHandler[typeId] = new MessageRegistration
+        {
+            TypeId = typeId,
+            MessageType = typeof(T),
+            Factory = () => new T(),
+            Handler = (sender, msg) => handler((T)msg),
+            CheckTimestamp = checkTimestamp
+        };
+    }
+
+    public void Handle<T>(Action<CSteamID, T> handler, bool checkTimestamp = false) where T : INetMessage, new()
+    {
+        if (!_typeToId.TryGetValue(typeof(T), out var typeId))
+            throw new Exception($"Message type {typeof(T).Name} has not been registered");
+
+        _idToHandler[typeId] = new MessageRegistration
         {
             TypeId = typeId,
             MessageType = typeof(T),
@@ -41,7 +63,6 @@ public class MessageRegistry
             Handler = (sender, msg) => handler(sender, (T)msg),
             CheckTimestamp = checkTimestamp
         };
-        _typeToId[typeof(T)] = typeId;
     }
 
     public void Send<T>(T message, SendMode mode, SendTarget target) where T : INetMessage
@@ -74,6 +95,18 @@ public class MessageRegistry
     public void Broadcast<T>(T message, SendMode mode = SendMode.Reliable) where T : INetMessage => Send(message, mode, SendTarget.Broadcast);
     public void SendToHost<T>(T message, SendMode mode = SendMode.Reliable) where T : INetMessage => Send(message, mode, SendTarget.Host);
 
+    public void BroadcastWithSelf<T>(T message, SendMode mode = SendMode.Reliable) where T : INetMessage
+    {
+        // Send to others
+        Send(message, mode, SendTarget.Broadcast);
+
+        // Handle locally
+        if (_getLocalId != null && _typeToId.TryGetValue(typeof(T), out var typeId) && _idToHandler.TryGetValue(typeId, out var registration))
+        {
+            registration.Handler?.Invoke(_getLocalId(), message);
+        }
+    }
+
     public bool HandleRawMessage(CSteamID sender, byte[] data)
     {
         if (data == null || data.Length == 0) return false;
@@ -86,7 +119,7 @@ public class MessageRegistry
             var typeId = reader.ReadByte();
             var timestamp = reader.ReadDouble();
 
-            if (!_idToRegistration.TryGetValue(typeId, out var registration))
+            if (!_idToHandler.TryGetValue(typeId, out var registration))
             {
                 UmcLogger.Warn($"Unknown message type ID: {typeId}");
                 return false;

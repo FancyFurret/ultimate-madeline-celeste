@@ -64,7 +64,8 @@ public class PhaseManager
         // Determine which phase we should be in based on level and session state
         if (isHub)
         {
-            // Entering hub - ensure we're in Lobby phase
+            // Entering hub - call orig first, then add phase entity
+            orig(level, playerIntro, isFromLoader);
             EnsurePhaseEntity<HubPhase>(level, GamePhase.Lobby);
         }
         else if (session.Phase == GamePhase.Playing)
@@ -72,6 +73,8 @@ public class PhaseManager
             // Entering a gameplay level while in Playing phase
             var levelSid = PendingLevelSID ?? sid;
             PendingLevelSID = null;
+            // Call orig first, then add phase entity
+            orig(level, playerIntro, isFromLoader);
             EnsurePhaseEntity<PlayingPhase>(level, GamePhase.Playing, levelSid);
         }
         else
@@ -80,18 +83,15 @@ public class PhaseManager
             UmcLogger.Info($"Entered UMC level '{sid}' outside Playing phase - redirecting to hub");
             Phase = GamePhase.Lobby;
 
+            // Still call orig to let the level load (avoids crashes), redirect happens after
+            orig(level, playerIntro, isFromLoader);
+
             // Schedule redirect after this frame completes
             level.OnEndOfFrame += () =>
             {
                 LevelEnter.Go(new global::Celeste.Session(AreaData.Get(HubStageId).ToKey()), false);
             };
-
-            // Still call orig to let the level load (avoids crashes), redirect happens after
-            orig(level, playerIntro, isFromLoader);
-            return;
         }
-
-        orig(level, playerIntro, isFromLoader);
     }
 
     private void EnsurePhaseEntity<T>(Level level, GamePhase expectedPhase, string levelSid = null) where T : Entity

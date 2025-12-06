@@ -32,7 +32,7 @@ public class LevelSelection
     private float _countdownTimer;
     private bool _showingGo;
     private float _goTimer;
-    private string _selectedMapSID;
+    private string _selectedMapSid;
 
     // Arrow elimination sequence state
     private bool _eliminationActive;
@@ -45,7 +45,6 @@ public class LevelSelection
     private float _cameraZoomTimer;
 
     public bool IsCountdownActive => _countdownActive || _showingGo || _eliminationActive || _cameraZooming;
-    public string SelectedMapSID => _selectedMapSID;
 
     private bool IsHost => NetworkManager.Instance?.IsHost ?? true;
 
@@ -53,13 +52,10 @@ public class LevelSelection
     {
         _hub = hub;
         _players = players;
-    }
-
-    public void RegisterMessages(MessageRegistry messages)
-    {
-        messages.Register<LevelVoteStateMessage>(20, HandleVoteState);
-        messages.Register<LevelVoteEliminateMessage>(21, HandleVoteEliminate);
-        messages.Register<LoadLevelMessage>(22, HandleLoadLevel);
+        
+        NetworkManager.Handle<LevelVoteStateMessage>(HandleVoteState);
+        NetworkManager.Handle<LevelVoteEliminateMessage>(HandleVoteEliminate);
+        NetworkManager.Handle<LoadLevelMessage>(HandleLoadLevel);
     }
 
     private void HandleVoteState(CSteamID sender, LevelVoteStateMessage message)
@@ -67,7 +63,7 @@ public class LevelSelection
         // Only clients handle this
         if (IsHost) return;
 
-        _selectedMapSID = message.WinningMapSID;
+        _selectedMapSid = message.WinningMapSID;
 
         switch (message.Phase)
         {
@@ -152,13 +148,11 @@ public class LevelSelection
         }
     }
 
-    private void HandleLoadLevel(CSteamID sender, LoadLevelMessage message)
+    private void HandleLoadLevel(LoadLevelMessage message)
     {
-        // Only clients handle this
-        if (IsHost) return;
-
-        UmcLogger.Info($"Received load level message: {message.MapSID}");
-        LoadLevelInternal(message.MapSID);
+        UmcLogger.Info($"Loading level: {message.MapSid}");
+        PlayerSpawner.Instance?.DespawnAllSessionPlayers();
+        PhaseManager.Instance?.TransitionToLevel(message.MapSid);
     }
 
     private void BroadcastVoteState(LevelVotePhase phase, int countdownNumber = 0)
@@ -173,7 +167,7 @@ public class LevelSelection
             Phase = phase,
             CountdownNumber = countdownNumber,
             WinningButtonPosition = _winningButton?.Position ?? Vector2.Zero,
-            WinningMapSID = _selectedMapSID ?? ""
+            WinningMapSID = _selectedMapSid ?? ""
         });
     }
 
@@ -290,7 +284,7 @@ public class LevelSelection
 
         _countdownActive = true;
         _countdownTimer = CountdownDuration;
-        _selectedMapSID = mapSID;
+        _selectedMapSid = mapSID;
 
         // Create countdown UI
         if (_countdownUI == null)
@@ -363,7 +357,7 @@ public class LevelSelection
 
         _countdownActive = false;
         _countdownTimer = 0f;
-        _selectedMapSID = null;
+        _selectedMapSid = null;
         _lastBroadcastNumber = -1;
 
         _countdownUI?.Hide();
@@ -373,7 +367,7 @@ public class LevelSelection
 
     private void FinishCountdown()
     {
-        UmcLogger.Info($"Level selection complete: {_selectedMapSID}");
+        UmcLogger.Info($"Level selection complete: {_selectedMapSid}");
 
         // Freeze player inputs and prevent joining
         if (PlayerSpawner.Instance != null)
@@ -432,7 +426,7 @@ public class LevelSelection
         if (buttonsWithPlayers.Count == 1)
         {
             _winningButton = buttonsWithPlayers[0];
-            _selectedMapSID = _winningButton.MapSID;
+            _selectedMapSid = _winningButton.MapSID;
             UmcLogger.Info("All players on same button, starting level immediately");
 
             _countdownUI?.Hide();
@@ -468,9 +462,9 @@ public class LevelSelection
         // (if 3 players on A and 1 on B, 75% chance A wins)
         var (winningPlayer, winningButton) = allPlayersOnButtons[Calc.Random.Next(allPlayersOnButtons.Count)];
         _winningButton = winningButton;
-        _selectedMapSID = _winningButton.MapSID;
+        _selectedMapSid = _winningButton.MapSID;
 
-        UmcLogger.Info($"Random player {winningPlayer.Name} selected, winning button: {_selectedMapSID}");
+        UmcLogger.Info($"Random player {winningPlayer.Name} selected, winning button: {_selectedMapSid}");
 
         // Find all players NOT on the winning button (losing players)
         _losingPlayers = new List<UmcPlayer>();
@@ -577,25 +571,8 @@ public class LevelSelection
 
     private void StartLevel()
     {
-        UmcLogger.Info($"=== STARTING LEVEL: {_selectedMapSID} ===");
-
-        // Broadcast to clients
-        var net = NetworkManager.Instance;
-        if (net?.IsOnline == true)
-        {
-            net.Messages.Broadcast(new LoadLevelMessage { MapSID = _selectedMapSID });
-        }
-
-        LoadLevelInternal(_selectedMapSID);
-    }
-
-    private void LoadLevelInternal(string mapSID)
-    {
-        // Despawn all current players before transitioning
-        PlayerSpawner.Instance?.DespawnAllSessionPlayers();
-
-        // Use PhaseManager to transition to the level
-        PhaseManager.Instance?.TransitionToLevel(mapSID);
+        UmcLogger.Info($"=== STARTING LEVEL: {_selectedMapSid} ===");
+        NetworkManager.BroadcastWithSelf(new LoadLevelMessage { MapSid = _selectedMapSid });
     }
 }
 

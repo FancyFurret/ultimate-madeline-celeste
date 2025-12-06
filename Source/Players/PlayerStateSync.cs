@@ -21,13 +21,10 @@ public class PlayerStateSync
     public PlayerStateSync()
     {
         Instance = this;
-    }
-
-    public void RegisterMessages(MessageRegistry messages)
-    {
-        messages.Register<ClientPlayersFrameMessage>(0, HandleClientPlayersFrame, checkTimestamp: true);
-        messages.Register<PlayerGraphicsMessage>(7, HandlePlayerGraphics);
-        messages.Register<PlayerEventMessage>(6, HandlePlayerEventMessage);
+        
+        NetworkManager.Handle<ClientPlayersFrameMessage>(HandleClientPlayersFrame, checkTimestamp: true);
+        NetworkManager.Handle<PlayerGraphicsMessage>(HandlePlayerGraphics);
+        NetworkManager.Handle<PlayerEventMessage>(HandlePlayerEventMessage);
     }
 
     public void Clear()

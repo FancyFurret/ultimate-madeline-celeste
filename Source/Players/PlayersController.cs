@@ -38,13 +38,15 @@ public class PlayersController
     public bool IsSlotAvailable(int slot) => slot >= 0 && slot < MaxPlayers && GetAtSlot(slot) == null;
     public bool IsDeviceTaken(InputDevice device) => All.Any(p => p.Device != null && p.Device.Equals(device));
 
-    public void RegisterMessages(MessageRegistry messages)
+    public PlayersController()
     {
-        messages.Register<PlayerJoinRequestMessage>(1, HandlePlayerJoinRequest);
-        messages.Register<PlayerJoinResponseMessage>(2, HandlePlayerJoinResponse);
-        messages.Register<PlayerAddedMessage>(3, HandlePlayerAddedMessage);
-        messages.Register<PlayerRemovedMessage>(4, HandlePlayerRemovedMessage);
+        NetworkManager.Handle<PlayerJoinRequestMessage>(HandlePlayerJoinRequest);
+        NetworkManager.Handle<PlayerJoinResponseMessage>(HandlePlayerJoinResponse);
+        NetworkManager.Handle<PlayerAddedMessage>(HandlePlayerAddedMessage);
+        NetworkManager.Handle<PlayerRemovedMessage>(HandlePlayerRemovedMessage);
     }
+
+    public UmcPlayer GetByClientId(ulong clientId) => All.FirstOrDefault(p => p.ClientId == clientId);
 
     public int FindFirstAvailableSlot()
     {

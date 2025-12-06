@@ -288,14 +288,6 @@ public class PlayerEventMessage : INetMessage
     public void Deserialize(BinaryReader reader) { PlayerIndex = reader.ReadInt32(); EventType = (PlayerEventType)reader.ReadByte(); Data = reader.ReadString(); }
 }
 
-public class CursorPositionMessage : INetMessage
-{
-    public int PlayerIndex { get; set; }
-    public Vector2 WorldPosition { get; set; }
-    public void Serialize(BinaryWriter writer) { writer.Write((byte)PlayerIndex); writer.Write(WorldPosition.X); writer.Write(WorldPosition.Y); }
-    public void Deserialize(BinaryReader reader) { PlayerIndex = reader.ReadByte(); WorldPosition = new(reader.ReadSingle(), reader.ReadSingle()); }
-}
-
 // Level voting messages
 public enum LevelVotePhase : byte { None, Countdown, Go, Eliminating, CameraZoom, Complete }
 
@@ -343,16 +335,16 @@ public class LevelVoteEliminateMessage : INetMessage
 /// </summary>
 public class LoadLevelMessage : INetMessage
 {
-    public string MapSID { get; set; }
+    public string MapSid { get; set; }
 
     public void Serialize(BinaryWriter writer)
     {
-        writer.WriteNullableString(MapSID);
+        writer.WriteNullableString(MapSid);
     }
 
     public void Deserialize(BinaryReader reader)
     {
-        MapSID = reader.ReadString();
+        MapSid = reader.ReadString();
     }
 }
 

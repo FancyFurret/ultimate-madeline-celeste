@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Celeste.Mod.MotionSmoothing.Utilities;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
-using Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
-using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -36,6 +33,9 @@ public class CameraController : HookedFeature<CameraController>
     private Vector2? _focusOverride;
     private float _focusZoom = 1f;
 
+    // External entities to track (weak references so we don't prevent GC)
+    private readonly List<WeakReference<Entity>> _trackedEntities = new();
+
     /// <summary>
     /// Sets a focus override that the camera will zoom to.
     /// </summary>
@@ -58,6 +58,34 @@ public class CameraController : HookedFeature<CameraController>
     /// Whether a focus override is currently active.
     /// </summary>
     public bool HasFocusOverride => _focusOverride.HasValue;
+
+    /// <summary>
+    /// Adds an entity for the camera to track. Uses weak reference so it won't prevent GC.
+    /// </summary>
+    public void TrackEntity(Entity entity)
+    {
+        if (entity == null) return;
+
+        // Check if already tracking
+        foreach (var weakRef in _trackedEntities)
+        {
+            if (weakRef.TryGetTarget(out var existing) && existing == entity)
+                return;
+        }
+
+        _trackedEntities.Add(new WeakReference<Entity>(entity));
+    }
+
+    /// <summary>
+    /// Stops tracking an entity.
+    /// </summary>
+    public void UntrackEntity(Entity entity)
+    {
+        if (entity == null) return;
+
+        _trackedEntities.RemoveAll(weakRef =>
+            !weakRef.TryGetTarget(out var target) || target == entity);
+    }
 
     protected override void Hook()
     {
@@ -181,18 +209,16 @@ public class CameraController : HookedFeature<CameraController>
                 positions.Add(remote.Position);
         }
 
-        if (HubPhase.Instance?.IsSelecting ?? false)
+        // Get positions from tracked entities (clean up dead refs as we go)
+        for (int i = _trackedEntities.Count - 1; i >= 0; i--)
         {
-            var pedestals = level.Tracker.GetEntities<SkinPedestal>();
-            foreach (var entity in pedestals)
+            if (_trackedEntities[i].TryGetTarget(out var entity))
             {
-                if (entity is SkinPedestal pedestal && pedestal.Active && pedestal.Visible)
-                    positions.Add(pedestal.Position);
+                if (entity.Scene != null && entity.Visible && entity.Active)
+                    positions.Add(entity.Position);
             }
-
-            var cursors = level.Entities.OfType<PlayerCursor>().Where(c => c.IsActive);
-            foreach (var cursor in cursors)
-                positions.Add(cursor.GetWorldPosition());
+            else
+                _trackedEntities.RemoveAt(i);
         }
 
         return positions;

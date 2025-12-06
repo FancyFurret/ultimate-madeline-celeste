@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Steam;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
+using Monocle;
 using Steamworks;
 
 namespace Celeste.Mod.UltimateMadelineCeleste.Network;
@@ -21,18 +23,21 @@ public class LobbyController
     public string LobbyCode => SteamLobby.Instance?.LobbyCode;
     public List<LobbyMember> Members => SteamLobby.Instance?.LobbyMembers;
 
+    /// <summary>
+    /// True when client is waiting for lobby state from host.
+    /// </summary>
+    public bool IsWaitingForLobbyState { get; private set; }
+
     public event Action OnConnected;
     public event Action OnDisconnected;
     public event Action<string> OnError;
+    public event Action OnLobbyStateReceived;
 
     public LobbyController()
     {
         Instance = this;
-    }
-
-    public void RegisterMessages(MessageRegistry messages)
-    {
-        messages.Register<LobbyStateMessage>(5, HandleLobbyStateMessage);
+        NetworkManager.Handle<LobbyStateMessage>(HandleLobbyStateMessage);
+        NetworkManager.Handle<RequestLobbyStateMessage>(HandleRequestLobbyState);
     }
 
     public void Initialize(SteamLobby lobbyManager)
@@ -78,6 +83,7 @@ public class LobbyController
         }
 
         UmcLogger.Info($"Joining online game: {code}");
+        IsWaitingForLobbyState = true;
         SteamLobby.Instance?.JoinLobbyByCode(code);
     }
 
@@ -85,6 +91,7 @@ public class LobbyController
     {
         if (!IsOnline) return;
         UmcLogger.Info("Leaving lobby...");
+        IsWaitingForLobbyState = false;
         SteamLobby.Instance?.LeaveLobby();
     }
 
@@ -98,6 +105,20 @@ public class LobbyController
         SteamLobby.Instance?.OpenInviteOverlay();
     }
 
+    /// <summary>
+    /// Called by client when they're ready to receive lobby state (scene is loaded).
+    /// </summary>
+    public void RequestLobbyState()
+    {
+        if (IsHost) return;
+        if (!IsOnline) return;
+
+        UmcLogger.Info("Scene: " + Engine.Scene);
+        UmcLogger.Info("Requesting lobby state from host...");
+        IsWaitingForLobbyState = true;
+        NetworkManager.SendToHost(new RequestLobbyStateMessage());
+    }
+
     private void HandleLobbyCreated(CSteamID lobbyId)
     {
         UmcLogger.Info($"Lobby created: {lobbyId}");
@@ -109,6 +130,7 @@ public class LobbyController
         if (!success)
         {
             UmcLogger.Error("Failed to join lobby");
+            IsWaitingForLobbyState = false;
             OnError?.Invoke("Failed to join lobby");
             return;
         }
@@ -120,6 +142,7 @@ public class LobbyController
     private void HandleLobbyLeft()
     {
         UmcLogger.Info("Left lobby");
+        IsWaitingForLobbyState = false;
         GameSession.Instance?.Players.ClearRemotePlayers();
         OnDisconnected?.Invoke();
     }
@@ -127,15 +150,23 @@ public class LobbyController
     private void HandleClientJoined(CSteamID steamId, string clientName)
     {
         UmcLogger.Info($"Client joined: {clientName} ({steamId})");
-
-        if (IsHost)
-        {
-            SendLobbyStateTo(steamId);
-        }
+        // Don't send lobby state immediately - wait for client to request it
     }
 
     /// <summary>
-    /// Sends full lobby state to a client when they join.
+    /// Host receives this when a client is ready for lobby state.
+    /// </summary>
+    private void HandleRequestLobbyState(CSteamID senderId, RequestLobbyStateMessage message)
+    {
+        if (!IsHost) return;
+
+        UmcLogger.Info($"Client {SteamManager.GetPlayerName(senderId)} requested lobby state");
+        SendLobbyStateTo(senderId);
+        NetworkedEntityRegistry.Instance?.SendAllEntitiesTo(senderId);
+    }
+
+    /// <summary>
+    /// Sends full lobby state to a client.
     /// </summary>
     private void SendLobbyStateTo(CSteamID steamId)
     {
@@ -164,11 +195,13 @@ public class LobbyController
         UmcLogger.Info($"Client left: {clientName} ({steamId})");
         GameSession.Instance?.Players.HandleClientLeft(steamId.m_SteamID);
         NetworkManager.Instance?.Messages.ClearPeerState(steamId);
+        NetworkedEntityRegistry.Instance?.RemoveEntitiesOwnedBy(steamId.m_SteamID);
     }
 
     private void HandleLobbyStateMessage(CSteamID senderId, LobbyStateMessage message)
     {
         UmcLogger.Info($"Received lobby state: {message.Players.Count} players");
+        IsWaitingForLobbyState = false;
 
         var players = GameSession.Instance?.Players;
         if (players == null) return;
@@ -186,10 +219,19 @@ public class LobbyController
             if (!isLocal && !string.IsNullOrEmpty(playerInfo.SkinId))
             {
                 player.SkinId = playerInfo.SkinId;
-                UmcLogger.Info("ADDING ENTTIY FRO LOBBY STATE PLY");
                 players.SpawnPlayerEntity(player);
             }
         }
+
+        OnLobbyStateReceived?.Invoke();
     }
 }
 
+/// <summary>
+/// Client sends this to host when ready to receive lobby state.
+/// </summary>
+public class RequestLobbyStateMessage : INetMessage
+{
+    public void Serialize(BinaryWriter writer) { }
+    public void Deserialize(BinaryReader reader) { }
+}

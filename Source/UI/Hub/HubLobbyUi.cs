@@ -55,7 +55,9 @@ public class HubLobbyUi : Entity
 
             if (player != null)
             {
+                // Show "Choose Character" if player is selecting OR if they're a local player without a skin
                 bool isSelecting = hubPhase?.IsPlayerSelecting(player) == true;
+                bool needsCharacterSelection = player.IsLocal && string.IsNullOrEmpty(player.SkinId);
 
                 var holdAction = hubPhase?.GetHoldAction(i);
                 if (holdAction?.ShowVisual == true)
@@ -63,7 +65,7 @@ public class HubLobbyUi : Entity
                     RenderHoldIndicator(x, slotY, holdAction);
                 }
 
-                if (isSelecting)
+                if (isSelecting || needsCharacterSelection)
                 {
                     float pulse = 0.7f + 0.3f * (float)System.Math.Sin(Scene.TimeActive * 4f);
                     ActiveFont.Draw("Choose Character", new Vector2(x + SlotWidth / 2f, slotY + SlotHeight / 2f),
