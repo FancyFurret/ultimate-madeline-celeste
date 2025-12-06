@@ -24,6 +24,11 @@ public class PartyBox : Entity
     private const float SlotOffset = 27f;
     private const float SlideDistance = 250f;
 
+    // Shadow settings
+    private const float PropShadowOffsetX = 2f;
+    private const float PropShadowOffsetY = 2f;
+    private const float PropShadowAlpha = 0.5f;
+
     private MTexture _boxInside;
     private MTexture _lidLeftTop;
     private MTexture _lidRightTop;
@@ -446,6 +451,22 @@ public class PartyBox : Entity
         if (_propRenderTarget == null) return;
 
         var targetCenter = new Vector2(RenderTargetSize / 2f, RenderTargetSize / 2f);
+        var shadowOffset = new Vector2(PropShadowOffsetX, PropShadowOffsetY) * _zoomScale;
+
+        // Draw shadow (offset, black tint)
+        Draw.SpriteBatch.Draw(
+            _propRenderTarget,
+            boxPos + shadowOffset,
+            null,
+            Color.Black * PropShadowAlpha,
+            0f,
+            targetCenter,
+            1f,
+            SpriteEffects.None,
+            0f
+        );
+
+        // Draw actual props
         Draw.SpriteBatch.Draw(
             _propRenderTarget,
             boxPos,

@@ -28,6 +28,7 @@ public class PlacingPhase
     private readonly Dictionary<UmcPlayer, PlayerInput> _playerInputs = new();
     private readonly Level _level;
     private PlayerCursors _cursors;
+    private PlacingOverlay _overlay;
 
     private const float PositionLerpSpeed = 30f;
 
@@ -46,6 +47,10 @@ public class PlacingPhase
     {
         _level = level;
         _cursors = new PlayerCursors(level, onConfirm: HandlePlacingConfirm);
+
+        // Create the visual overlay (dark background + grid)
+        _overlay = new PlacingOverlay();
+        level.Add(_overlay);
 
         // Register network handlers
         NetworkManager.Handle<PropPlacedMessage>(HandlePropPlaced);
@@ -408,6 +413,8 @@ public class PlacingPhase
 
     private void HandlePlacingComplete(PlacingCompleteMessage message)
     {
+        // Fade out the overlay before completing
+        _overlay?.FadeOut();
         OnComplete?.Invoke();
     }
 
