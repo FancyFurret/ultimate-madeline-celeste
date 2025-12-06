@@ -25,4 +25,10 @@ public class UmcSettings : EverestModuleSettings
 
     [DefaultButtonBinding(Buttons.RightTrigger, Keys.LeftShift)]
     public ButtonBinding ButtonCursorSprint { get; set; }
+
+    [DefaultButtonBinding(Buttons.RightShoulder, Keys.E)]
+    public ButtonBinding ButtonRotateRight { get; set; }
+
+    [DefaultButtonBinding(Buttons.LeftShoulder, Keys.Q)]
+    public ButtonBinding ButtonRotateLeft { get; set; }
 }

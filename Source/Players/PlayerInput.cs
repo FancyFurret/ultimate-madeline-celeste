@@ -25,6 +25,8 @@ public class PlayerInput
     public VirtualButton MenuConfirm { get; private set; }
     public VirtualButton MenuCancel { get; private set; }
     public VirtualButton CursorSprint { get; private set; }
+    public VirtualButton RotateRight { get; private set; }
+    public VirtualButton RotateLeft { get; private set; }
 
     public InputDevice Device { get; }
 
@@ -54,6 +56,8 @@ public class PlayerInput
         MenuConfirm = Input.MenuConfirm.Clone(gamepadIndex, deviceType);
         MenuCancel = Input.MenuCancel.Clone(gamepadIndex, deviceType);
         CursorSprint = UmcModule.Settings.ButtonCursorSprint.Button.Clone(gamepadIndex, deviceType);
+        RotateRight = UmcModule.Settings.ButtonRotateRight.Button.Clone(gamepadIndex, deviceType);
+        RotateLeft = UmcModule.Settings.ButtonRotateLeft.Button.Clone(gamepadIndex, deviceType);
     }
 
     public void Deregister()
@@ -72,5 +76,7 @@ public class PlayerInput
         MenuConfirm?.Deregister();
         MenuCancel?.Deregister();
         CursorSprint?.Deregister();
+        RotateRight?.Deregister();
+        RotateLeft?.Deregister();
     }
 }

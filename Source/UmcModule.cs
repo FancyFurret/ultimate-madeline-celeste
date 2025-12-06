@@ -127,6 +127,8 @@ public class UmcModule : EverestModule
 
         // Placing phase messages
         messages.Register<PropPlacedMessage>();
+        messages.Register<PropRotatedMessage>();
+        messages.Register<PropFirstStageMessage>();
         messages.Register<PlacingCompleteMessage>();
 
         // Platforming phase messages

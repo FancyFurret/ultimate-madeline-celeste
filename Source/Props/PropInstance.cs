@@ -26,6 +26,11 @@ public class PropInstance
     public Vector2 Position { get; private set; }
 
     /// <summary>
+    /// Target position for two-stage props (e.g., zip mover destination).
+    /// </summary>
+    public Vector2? TargetPosition { get; private set; }
+
+    /// <summary>
     /// Current rotation in degrees (0, 90, 180, 270).
     /// </summary>
     public float Rotation { get; private set; }
@@ -45,6 +50,16 @@ public class PropInstance
     /// </summary>
     public bool IsSpawned => Entity is { Scene: not null };
 
+    /// <summary>
+    /// Whether this prop requires two-stage placement.
+    /// </summary>
+    public bool IsTwoStage => Prop.IsTwoStage;
+
+    /// <summary>
+    /// Whether the target has been set (for two-stage props).
+    /// </summary>
+    public bool HasTarget => TargetPosition.HasValue;
+
     public PropInstance(Prop prop)
     {
         Prop = prop;
@@ -59,8 +74,43 @@ public class PropInstance
             Despawn();
 
         Position = topLeft;
-        Entity = Prop.Build(topLeft, Rotation, MirrorX, MirrorY);
+
+        // Use target position if set (for two-stage props)
+        if (TargetPosition.HasValue)
+            Entity = Prop.Build(topLeft, TargetPosition.Value, Rotation, MirrorX, MirrorY);
+        else
+            Entity = Prop.Build(topLeft, Rotation, MirrorX, MirrorY);
+
         scene.Add(Entity);
+    }
+
+    /// <summary>
+    /// Sets the target position for two-stage props.
+    /// </summary>
+    public void SetTarget(Vector2 targetTopLeft)
+    {
+        if (!IsTwoStage) return;
+        TargetPosition = targetTopLeft;
+
+        if (!IsSpawned) return;
+
+        if (Prop.RequiresRebuildOnMove)
+        {
+            RebuildIfSpawned();
+        }
+        else
+        {
+            var targetPos = targetTopLeft + Prop.GetSprite(Rotation).Offset;
+            Prop.OnTargetChanged(Entity, targetPos);
+        }
+    }
+
+    /// <summary>
+    /// Clears the target position.
+    /// </summary>
+    public void ClearTarget()
+    {
+        TargetPosition = null;
     }
 
     /// <summary>
@@ -89,9 +139,15 @@ public class PropInstance
         if (!IsSpawned) return;
 
         if (Prop.RequiresRebuildOnMove)
+        {
             RebuildIfSpawned();
+        }
         else
-            Entity.Position = topLeft + Prop.GetSprite(Rotation).Offset;
+        {
+            var entityPos = topLeft + Prop.GetSprite(Rotation).Offset;
+            Entity.Position = entityPos;
+            Prop.OnPositionChanged(Entity, entityPos);
+        }
     }
 
     /// <summary>
@@ -128,7 +184,12 @@ public class PropInstance
         Prop.OnDespawn(Entity);
         Entity.RemoveSelf();
 
-        Entity = Prop.Build(Position, Rotation, MirrorX, MirrorY);
+        // Use target position if set (for two-stage props)
+        if (TargetPosition.HasValue)
+            Entity = Prop.Build(Position, TargetPosition.Value, Rotation, MirrorX, MirrorY);
+        else
+            Entity = Prop.Build(Position, Rotation, MirrorX, MirrorY);
+
         scene.Add(Entity);
     }
 }

@@ -100,6 +100,9 @@ public class PlatformingPhase
         // Only handle death if it actually happened
         if (deadBody == null) return deadBody;
 
+        // Clear the death action to prevent level reload
+        deadBody.DeathAction = null;
+
         // Track this dead body so we can intercept its End call
         _instance._managedDeadBodies.Add(deadBody);
 

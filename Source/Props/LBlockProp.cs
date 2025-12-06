@@ -3,6 +3,8 @@ using Monocle;
 
 namespace Celeste.Mod.UltimateMadelineCeleste.Props;
 
+using System.Linq;
+
 /// <summary>
 /// An L-shaped block prop (5 tiles total in an L shape).
 /// </summary>
@@ -28,7 +30,7 @@ public class LBlockProp : Prop
 /// </summary>
 public class PlacedLBlock : Solid
 {
-    private const char TileId = 'G';
+    private const char TileId = '4';
 
     private static readonly Point[] BaseTiles =
     {
@@ -57,6 +59,10 @@ public class PlacedLBlock : Solid
             tile = RotateTile(tile, rotation);
             _tiles[i] = tile;
         }
+
+        // Create proper L-shaped collider from the tiles
+        var hitboxes = _tiles.Select(t => new Hitbox(8, 8, t.X * 8, t.Y * 8)).ToArray();
+        Collider = new ColliderList(hitboxes);
     }
 
     private static Point RotateTile(Point tile, float rotation)

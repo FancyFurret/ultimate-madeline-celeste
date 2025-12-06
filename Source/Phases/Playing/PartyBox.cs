@@ -136,6 +136,7 @@ public class PartyBox : Entity
         {
             if (slot.IsTaken || slot.PropInstance.IsSpawned) continue;
 
+            // Position at render target coordinates (centered at 128, 128)
             var center = new Vector2(RenderTargetSize / 2f, RenderTargetSize / 2f);
             var slotCenter = center + slot.LocalOffset * _zoomScale;
             var topLeft = slotCenter - slot.Prop.GetCenter();
@@ -299,6 +300,8 @@ public class PartyBox : Entity
             DrawOpeningLids(renderPos, _lidProgress);
         else if (_state == BoxState.Closing)
             DrawOpeningLids(renderPos, _lidProgress);
+
+        // DrawDebugPropSizes(renderPos);
     }
 
     public override void DebugRender(Camera camera)
@@ -396,6 +399,8 @@ public class PartyBox : Entity
     private void RenderPropsToTarget()
     {
         if (_propRenderTarget == null || _fakeLevel == null) return;
+        var level = Scene as Level;
+        if (level == null) return;
 
         var engine = Engine.Instance;
         var previousRenderTarget = engine.GraphicsDevice.GetRenderTargets();
@@ -404,6 +409,10 @@ public class PartyBox : Entity
 
         engine.GraphicsDevice.SetRenderTarget(_propRenderTarget);
         engine.GraphicsDevice.Clear(Color.Transparent);
+
+        // Temporarily move camera so CullHelper thinks our render target area is visible
+        var savedCameraPos = level.Camera.Position;
+        level.Camera.Position = Vector2.Zero;
 
         Draw.SpriteBatch.Begin(
             SpriteSortMode.Deferred,
@@ -420,6 +429,9 @@ public class PartyBox : Entity
         }
 
         Draw.SpriteBatch.End();
+
+        // Restore camera position
+        level.Camera.Position = savedCameraPos;
 
         if (previousRenderTarget.Length > 0)
             engine.GraphicsDevice.SetRenderTargets(previousRenderTarget);

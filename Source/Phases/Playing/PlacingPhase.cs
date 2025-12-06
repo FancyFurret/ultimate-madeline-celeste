@@ -23,6 +23,9 @@ public class PlacingPhase
     private readonly Dictionary<UmcPlayer, Vector2> _targetPositions = new();
     private readonly HashSet<UmcPlayer> _placedPlayers = new();
     private readonly HashSet<UmcPlayer> _needsSpawn = new();
+    private readonly HashSet<UmcPlayer> _inSecondStage = new();
+    private readonly Dictionary<UmcPlayer, Vector2> _firstStagePositions = new();
+    private readonly Dictionary<UmcPlayer, PlayerInput> _playerInputs = new();
     private readonly Level _level;
     private PlayerCursors _cursors;
 
@@ -46,14 +49,23 @@ public class PlacingPhase
 
         // Register network handlers
         NetworkManager.Handle<PropPlacedMessage>(HandlePropPlaced);
+        NetworkManager.Handle<PropRotatedMessage>(HandlePropRotated);
+        NetworkManager.Handle<PropFirstStageMessage>(HandlePropFirstStage);
         NetworkManager.Handle<PlacingCompleteMessage>(HandlePlacingComplete);
 
         // Setup props for each player
         foreach (var kvp in playerSelections)
         {
+            var player = kvp.Key;
             var propInstance = new PropInstance(kvp.Value);
-            _playerProps[kvp.Key] = propInstance;
-            _needsSpawn.Add(kvp.Key);
+            _playerProps[player] = propInstance;
+            _needsSpawn.Add(player);
+
+            // Create input handler for local players
+            if (player.IsLocal && player.Device != null)
+            {
+                _playerInputs[player] = new PlayerInput(player.Device);
+            }
         }
 
         // Spawn cursors for local players
@@ -101,22 +113,73 @@ public class PlacingPhase
             if (!propInstance.IsSpawned) continue;
             if (!_cursors.Has(player)) continue;
 
-            // Calculate the snapped target position
+            // Handle rotation input for local players
+            if (_playerInputs.TryGetValue(player, out var input))
+            {
+                if (input.RotateRight.Pressed)
+                {
+                    input.RotateRight.ConsumePress();
+                    RotateProp(player, propInstance, 1);
+                }
+                else if (input.RotateLeft.Pressed)
+                {
+                    input.RotateLeft.ConsumePress();
+                    RotateProp(player, propInstance, -1);
+                }
+            }
+
+            // Calculate the snapped cursor position
             var worldPos = _cursors.GetWorldPosition(player);
             var snappedPos = new Vector2(
                 (float)Math.Round(worldPos.X / 8f) * 8f,
                 (float)Math.Round(worldPos.Y / 8f) * 8f
             );
 
-            var targetTopLeft = GetTopLeftFromCursor(snappedPos, propInstance);
-            _targetPositions[player] = targetTopLeft;
+            if (_inSecondStage.Contains(player))
+            {
+                // Second stage: position is locked, update target
+                var targetTopLeft = GetTopLeftFromCursor(snappedPos, propInstance);
+                propInstance.SetTarget(targetTopLeft);
+            }
+            else
+            {
+                // First stage: update position normally
+                var targetTopLeft = GetTopLeftFromCursor(snappedPos, propInstance);
+                _targetPositions[player] = targetTopLeft;
 
-            // Smoothly interpolate to the target position
-            var currentPos = propInstance.Position;
-            var t = 1f - (float)Math.Exp(-PositionLerpSpeed * Engine.DeltaTime);
-            var smoothedPos = Vector2.Lerp(currentPos, targetTopLeft, t);
+                // Smoothly interpolate to the target position
+                var currentPos = propInstance.Position;
+                var t = 1f - (float)Math.Exp(-PositionLerpSpeed * Engine.DeltaTime);
+                var smoothedPos = Vector2.Lerp(currentPos, targetTopLeft, t);
 
-            propInstance.SetPosition(smoothedPos);
+                propInstance.SetPosition(smoothedPos);
+            }
+        }
+    }
+
+    private void RotateProp(UmcPlayer player, PropInstance propInstance, int direction)
+    {
+        // Only rotate if the prop supports rotation
+        if (propInstance.Prop.AllowedRotation == RotationMode.None)
+            return;
+
+        // Calculate new rotation
+        float currentRotation = propInstance.Rotation;
+        float step = propInstance.Prop.AllowedRotation == RotationMode.Rotate90 ? 90f : 180f;
+        float newRotation = (currentRotation + direction * step + 360f) % 360f;
+
+        propInstance.SetRotation(newRotation);
+        Audio.Play("event:/ui/main/button_toggle_on");
+        UmcLogger.Info($"Player {player.Name} rotated {propInstance.Prop.Name} to {newRotation}°");
+
+        // Send rotation update over network
+        if (NetworkManager.Instance?.IsOnline == true)
+        {
+            NetworkManager.Broadcast(new PropRotatedMessage
+            {
+                PlayerIndex = player.SlotIndex,
+                Rotation = newRotation
+            });
         }
     }
 
@@ -139,43 +202,105 @@ public class PlacingPhase
             (float)Math.Round(position.Y / 8f) * 8f
         );
 
+        // Handle two-stage placement
+        if (propInstance.IsTwoStage && !_inSecondStage.Contains(player))
+        {
+            // First stage: lock start position, move to second stage
+            var topLeft = GetTopLeftFromCursor(snappedPos, propInstance);
+            propInstance.SetPosition(topLeft);
+            _firstStagePositions[player] = topLeft;
+            _inSecondStage.Add(player);
+
+            Audio.Play("event:/ui/main/button_toggle_on");
+            UmcLogger.Info($"Player {player.Name} set start position for {propInstance.Prop.Name}, now selecting target");
+
+            // Broadcast first stage over network
+            if (NetworkManager.Instance?.IsOnline == true)
+            {
+                NetworkManager.Broadcast(new PropFirstStageMessage
+                {
+                    PlayerIndex = player.SlotIndex,
+                    PositionX = topLeft.X,
+                    PositionY = topLeft.Y
+                });
+            }
+
+            return;
+        }
+
         // If online, send to host for validation; otherwise process locally
         if (NetworkManager.Instance?.IsOnline == true && !IsHost)
         {
-            NetworkManager.SendToHost(new PropPlacedMessage
+            var msg = new PropPlacedMessage
             {
                 PlayerIndex = player.SlotIndex,
                 PositionX = snappedPos.X,
-                PositionY = snappedPos.Y
-            });
+                PositionY = snappedPos.Y,
+                Rotation = propInstance.Rotation
+            };
+
+            // Include first stage position for two-stage props
+            if (_firstStagePositions.TryGetValue(player, out var firstPos))
+            {
+                msg.HasFirstStage = true;
+                msg.FirstStageX = firstPos.X;
+                msg.FirstStageY = firstPos.Y;
+            }
+
+            NetworkManager.SendToHost(msg);
         }
         else
         {
             // Host or local - process and broadcast
-            ProcessPropPlacement(player, snappedPos, propInstance);
+            Vector2? firstStagePos = _firstStagePositions.TryGetValue(player, out var fp) ? fp : null;
+            ProcessPropPlacement(player, snappedPos, propInstance, firstStagePos);
 
             if (NetworkManager.Instance?.IsOnline == true)
             {
-                NetworkManager.Broadcast(new PropPlacedMessage
+                var msg = new PropPlacedMessage
                 {
                     PlayerIndex = player.SlotIndex,
                     PositionX = snappedPos.X,
-                    PositionY = snappedPos.Y
-                });
+                    PositionY = snappedPos.Y,
+                    Rotation = propInstance.Rotation
+                };
+
+                if (firstStagePos.HasValue)
+                {
+                    msg.HasFirstStage = true;
+                    msg.FirstStageX = firstStagePos.Value.X;
+                    msg.FirstStageY = firstStagePos.Value.Y;
+                }
+
+                NetworkManager.Broadcast(msg);
             }
         }
     }
 
-    private void ProcessPropPlacement(UmcPlayer player, Vector2 snappedPos, PropInstance propInstance)
+    private void ProcessPropPlacement(UmcPlayer player, Vector2 snappedPos, PropInstance propInstance, Vector2? firstStagePos = null)
     {
         if (_placedPlayers.Contains(player)) return;
 
-        var topLeft = GetTopLeftFromCursor(snappedPos, propInstance);
-        propInstance.SetPosition(topLeft);
+        var targetTopLeft = GetTopLeftFromCursor(snappedPos, propInstance);
+
+        if (firstStagePos.HasValue)
+        {
+            // Two-stage prop: first stage is the position, second stage is the target
+            propInstance.SetPosition(firstStagePos.Value);
+            propInstance.SetTarget(targetTopLeft);
+            UmcLogger.Info($"Player {player.Name} placed {propInstance.Prop.Name} at {firstStagePos.Value} with target {targetTopLeft}");
+        }
+        else
+        {
+            // Single-stage prop
+            propInstance.SetPosition(targetTopLeft);
+            UmcLogger.Info($"Player {player.Name} placed {propInstance.Prop.Name} at {targetTopLeft}");
+        }
 
         _placedPlayers.Add(player);
+        _inSecondStage.Remove(player);
+        _firstStagePositions.Remove(player);
         Audio.Play("event:/ui/main/button_select");
-        UmcLogger.Info($"Player {player.Name} placed {propInstance.Prop.Name} at {topLeft}");
 
         _cursors.Remove(player);
         CheckAllPlayersPlaced();
@@ -214,23 +339,71 @@ public class PlacingPhase
         if (!_playerProps.TryGetValue(player, out var propInstance)) return;
 
         var snappedPos = new Vector2(message.PositionX, message.PositionY);
+        Vector2? firstStagePos = message.HasFirstStage
+            ? new Vector2(message.FirstStageX, message.FirstStageY)
+            : null;
+
+        // Apply rotation from message
+        propInstance.SetRotation(message.Rotation);
 
         // If we're host and received from client, validate and rebroadcast
         if (IsHost && sender.m_SteamID != NetworkManager.Instance.LocalClientId)
         {
-            ProcessPropPlacement(player, snappedPos, propInstance);
+            ProcessPropPlacement(player, snappedPos, propInstance, firstStagePos);
             NetworkManager.Broadcast(new PropPlacedMessage
             {
                 PlayerIndex = message.PlayerIndex,
                 PositionX = message.PositionX,
-                PositionY = message.PositionY
+                PositionY = message.PositionY,
+                Rotation = message.Rotation,
+                HasFirstStage = message.HasFirstStage,
+                FirstStageX = message.FirstStageX,
+                FirstStageY = message.FirstStageY
             });
         }
         else if (!IsHost)
         {
             // Client receiving from host
-            ProcessPropPlacement(player, snappedPos, propInstance);
+            ProcessPropPlacement(player, snappedPos, propInstance, firstStagePos);
         }
+    }
+
+    private void HandlePropRotated(CSteamID sender, PropRotatedMessage message)
+    {
+        var session = GameSession.Instance;
+        if (session == null) return;
+
+        var player = session.Players.GetAtSlot(message.PlayerIndex);
+        if (player == null) return;
+
+        // Don't apply to local players (they already rotated locally)
+        if (player.IsLocal) return;
+
+        if (!_playerProps.TryGetValue(player, out var propInstance)) return;
+
+        propInstance.SetRotation(message.Rotation);
+        UmcLogger.Info($"Remote player {player.Name} rotated to {message.Rotation}°");
+    }
+
+    private void HandlePropFirstStage(CSteamID sender, PropFirstStageMessage message)
+    {
+        var session = GameSession.Instance;
+        if (session == null) return;
+
+        var player = session.Players.GetAtSlot(message.PlayerIndex);
+        if (player == null) return;
+
+        // Don't apply to local players (they already handled it locally)
+        if (player.IsLocal) return;
+
+        if (!_playerProps.TryGetValue(player, out var propInstance)) return;
+
+        var position = new Vector2(message.PositionX, message.PositionY);
+        propInstance.SetPosition(position);
+        _firstStagePositions[player] = position;
+        _inSecondStage.Add(player);
+
+        UmcLogger.Info($"Remote player {player.Name} set first stage position at {position}");
     }
 
     private void HandlePlacingComplete(PlacingCompleteMessage message)
@@ -244,6 +417,65 @@ public class PlacingPhase
 #region Messages
 
 public class PropPlacedMessage : INetMessage
+{
+    public int PlayerIndex { get; set; }
+    public float PositionX { get; set; }
+    public float PositionY { get; set; }
+    public float Rotation { get; set; }
+
+    // For two-stage placement
+    public bool HasFirstStage { get; set; }
+    public float FirstStageX { get; set; }
+    public float FirstStageY { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerIndex);
+        writer.Write(PositionX);
+        writer.Write(PositionY);
+        writer.Write(Rotation);
+        writer.Write(HasFirstStage);
+        if (HasFirstStage)
+        {
+            writer.Write(FirstStageX);
+            writer.Write(FirstStageY);
+        }
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerIndex = reader.ReadByte();
+        PositionX = reader.ReadSingle();
+        PositionY = reader.ReadSingle();
+        Rotation = reader.ReadSingle();
+        HasFirstStage = reader.ReadBoolean();
+        if (HasFirstStage)
+        {
+            FirstStageX = reader.ReadSingle();
+            FirstStageY = reader.ReadSingle();
+        }
+    }
+}
+
+public class PropRotatedMessage : INetMessage
+{
+    public int PlayerIndex { get; set; }
+    public float Rotation { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerIndex);
+        writer.Write(Rotation);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerIndex = reader.ReadByte();
+        Rotation = reader.ReadSingle();
+    }
+}
+
+public class PropFirstStageMessage : INetMessage
 {
     public int PlayerIndex { get; set; }
     public float PositionX { get; set; }

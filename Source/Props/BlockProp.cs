@@ -65,7 +65,7 @@ public class PlacedBlock : Solid
         int tilesX = _width / 8;
         int tilesY = _height / 8;
 
-        var generated = GFX.FGAutotiler.GenerateBox('G', tilesX, tilesY);
+        var generated = GFX.FGAutotiler.GenerateBox('6', tilesX, tilesY);
         _tiles = generated.TileGrid;
 
         Add(_tiles);

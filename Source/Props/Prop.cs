@@ -64,6 +64,22 @@ public enum MirrorMode
 }
 
 /// <summary>
+/// Placement mode for props.
+/// </summary>
+public enum PlacementMode
+{
+    /// <summary>
+    /// Single click to place.
+    /// </summary>
+    SingleStage,
+
+    /// <summary>
+    /// First click places start, second click places target/end.
+    /// </summary>
+    TwoStage
+}
+
+/// <summary>
 /// Abstract base class for all props. Acts as a stateless template/factory.
 /// Use PropInstance to create instances with position/rotation state.
 /// </summary>
@@ -91,6 +107,16 @@ public abstract class Prop
     /// If true, the entity must be rebuilt when moved (e.g. IntroCar with wheels).
     /// </summary>
     public virtual bool RequiresRebuildOnMove => false;
+
+    /// <summary>
+    /// The placement mode for this prop. Override to enable two-stage placement.
+    /// </summary>
+    public virtual PlacementMode PlacementMode => PlacementMode.SingleStage;
+
+    /// <summary>
+    /// Whether this prop requires two-stage placement.
+    /// </summary>
+    public bool IsTwoStage => PlacementMode == PlacementMode.TwoStage;
 
     /// <summary>
     /// Gets the size for the given rotation.
@@ -143,18 +169,29 @@ public abstract class Prop
     }
 
     /// <summary>
-    /// Updates an entity's position.
+    /// Builds the entity with a target position (for two-stage placement).
     /// topLeft is the bounding box top-left; this method handles the sprite offset.
     /// </summary>
-    // public void SetPosition(Entity entity, Vector2 topLeft, float rotation = 0f)
-    // {
-    //     entity.Position = topLeft + GetSprite(rotation).Offset;
-    // }
+    public Entity Build(Vector2 topLeft, Vector2 targetTopLeft, float rotation = 0f, bool mirrorX = false, bool mirrorY = false)
+    {
+        var entityPos = topLeft + GetSprite(rotation).Offset;
+        var targetPos = targetTopLeft + GetSprite(rotation).Offset;
+        return BuildEntity(entityPos, targetPos, rotation, mirrorX, mirrorY);
+    }
 
     /// <summary>
     /// Override to build the entity. Position is already offset (entity position, not top-left).
     /// </summary>
     protected abstract Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY);
+
+    /// <summary>
+    /// Override for two-stage props. Target is the second position the player selected.
+    /// Default implementation ignores target and calls single-position BuildEntity.
+    /// </summary>
+    protected virtual Entity BuildEntity(Vector2 position, Vector2 target, float rotation, bool mirrorX, bool mirrorY)
+    {
+        return BuildEntity(position, rotation, mirrorX, mirrorY);
+    }
 
     /// <summary>
     /// Called when an entity is about to be despawned/removed.
@@ -167,5 +204,17 @@ public abstract class Prop
     /// Override to sync depth of related entities (e.g. IntroCar wheels).
     /// </summary>
     public virtual void OnDepthChanged(Entity entity, int depth) { }
+
+    /// <summary>
+    /// Called when the entity's position is updated.
+    /// Override for entities that need custom position handling (e.g. Bumper anchor).
+    /// </summary>
+    public virtual void OnPositionChanged(Entity entity, Vector2 newPosition) { }
+
+    /// <summary>
+    /// Called when the entity's target position is updated (for two-stage props).
+    /// Override for entities that need custom target handling (e.g. ZipMover target).
+    /// </summary>
+    public virtual void OnTargetChanged(Entity entity, Vector2 newTarget) { }
 }
 
