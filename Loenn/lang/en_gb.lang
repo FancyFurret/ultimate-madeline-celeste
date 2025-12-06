@@ -8,3 +8,9 @@ entities.UltimateMadelineCeleste/LevelButton.placements.name.normal=Level Button
 entities.UltimateMadelineCeleste/LevelButton.attributes.description.mapSID=The SID of the map this button leads to (e.g. "Celeste/1-ForsakenCity").
 entities.UltimateMadelineCeleste/LevelButton.attributes.description.previewTexture=Path to the level preview texture relative to the Gameplay atlas (e.g. "bgs/UMC/waterfall_preview").
 
+triggers.UltimateMadelineCeleste/PlacementBlocker.placements.name.normal=Placement Blocker
+triggers.UltimateMadelineCeleste/PlacementBlocker.tooltips.main=A zone that prevents players from placing props during the placing phase. Use around spawn areas.
+
+entities.UltimateMadelineCeleste/GoalFlag.placements.name.normal=Goal Flag
+entities.UltimateMadelineCeleste/GoalFlag.tooltips.main=The goal flag that players must reach to complete the level. Place at the end of your level.
+

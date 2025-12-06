@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
@@ -17,6 +18,7 @@ public class PlatformingPhase
     private const float AllDeadTransitionDelay = 1f;
     private readonly HashSet<PlayerDeadBody> _managedDeadBodies = new();
     private readonly HashSet<UmcPlayer> _deadPlayers = new();
+    private readonly HashSet<UmcPlayer> _finishedPlayers = new();
     private float _allDeadTimer;
     private static PlatformingPhase _instance;
 
@@ -26,14 +28,19 @@ public class PlatformingPhase
 
     public PlatformingPhase()
     {
-        // Reset dead player tracking
+        // Reset tracking
         _deadPlayers.Clear();
+        _finishedPlayers.Clear();
         _allDeadTimer = 0f;
         _instance = this;
 
         // Register network handlers
         NetworkManager.Handle<PlayerDeathSyncMessage>(HandlePlayerDeathSync);
+        NetworkManager.Handle<PlayerFinishedSyncMessage>(HandlePlayerFinishedSync);
         NetworkManager.Handle<PlatformingCompleteMessage>(HandlePlatformingComplete);
+
+        // Subscribe to goal flag events
+        GoalFlag.OnPlayerReachedGoal += HandlePlayerReachedGoal;
 
         // Now spawn all players
         PlayerSpawner.Instance?.SpawnAllSessionPlayers(Engine.Scene as Level);
@@ -49,9 +56,13 @@ public class PlatformingPhase
         // Only host controls the transition
         if (!IsHost) return;
 
-        // Only count down if all players are dead
         int totalPlayers = GameSession.Instance?.Players.All.Count ?? 0;
-        if (totalPlayers > 0 && _deadPlayers.Count >= totalPlayers)
+        if (totalPlayers <= 0) return;
+
+        // Check if all players finished or died
+        int activePlayersRemaining = totalPlayers - _deadPlayers.Count - _finishedPlayers.Count;
+
+        if (activePlayersRemaining <= 0)
         {
             _allDeadTimer += Engine.DeltaTime;
             if (_allDeadTimer >= AllDeadTransitionDelay)
@@ -78,6 +89,10 @@ public class PlatformingPhase
         PlayerSpawner.Instance?.DespawnAllSessionPlayers();
         On.Celeste.Player.Die -= OnPlayerDie;
         On.Celeste.PlayerDeadBody.End -= OnPlayerDeadBodyEnd;
+
+        // Unsubscribe from goal flag events
+        GoalFlag.OnPlayerReachedGoal -= HandlePlayerReachedGoal;
+        GoalFlag.ClearHandlers();
 
         if (_instance == this)
             _instance = null;
@@ -165,14 +180,40 @@ public class PlatformingPhase
     {
         int totalPlayers = GameSession.Instance?.Players.All.Count ?? 0;
         int deadCount = _deadPlayers.Count;
+        int finishedCount = _finishedPlayers.Count;
 
-        UmcLogger.Info($"Dead players: {deadCount}/{totalPlayers}");
+        UmcLogger.Info($"Dead: {deadCount}, Finished: {finishedCount}, Total: {totalPlayers}");
 
-        if (deadCount >= totalPlayers)
+        if (deadCount + finishedCount >= totalPlayers)
         {
             _allDeadTimer = 0f;
-            UmcLogger.Info("All players dead! Transitioning back to picking phase...");
+            UmcLogger.Info("All players done! Transitioning to scoring...");
         }
+    }
+
+    private void HandlePlayerReachedGoal(UmcPlayer player)
+    {
+        // Don't double-count
+        if (_finishedPlayers.Contains(player) || _deadPlayers.Contains(player))
+            return;
+
+        _finishedPlayers.Add(player);
+        Audio.Play("event:/game/07_summit/checkpoint_confetti");
+        UmcLogger.Info($"Player {player.Name} reached the goal! ({_finishedPlayers.Count} finished)");
+
+        // Despawn the player so they can't die after finishing
+        PlayerSpawner.Instance?.DespawnPlayer(player);
+
+        // Broadcast to network
+        if (NetworkManager.Instance?.IsOnline == true)
+        {
+            NetworkManager.Broadcast(new PlayerFinishedSyncMessage
+            {
+                PlayerIndex = player.SlotIndex
+            });
+        }
+
+        CheckAllPlayersDead();
     }
 
     #region Network Handlers
@@ -197,6 +238,26 @@ public class PlatformingPhase
         CheckAllPlayersDead();
     }
 
+    private void HandlePlayerFinishedSync(CSteamID sender, PlayerFinishedSyncMessage message)
+    {
+        var session = GameSession.Instance;
+        if (session == null) return;
+
+        var player = session.Players.GetAtSlot(message.PlayerIndex);
+        if (player == null) return;
+
+        // Don't double-count
+        if (_finishedPlayers.Contains(player)) return;
+
+        _finishedPlayers.Add(player);
+        UmcLogger.Info($"Synced finish for player {player.Name}");
+
+        // Despawn the remote player
+        PlayerSpawner.Instance?.DespawnPlayer(player);
+
+        CheckAllPlayersDead();
+    }
+
     private void HandlePlatformingComplete(PlatformingCompleteMessage message)
     {
         DoComplete();
@@ -208,6 +269,21 @@ public class PlatformingPhase
 #region Messages
 
 public class PlayerDeathSyncMessage : INetMessage
+{
+    public int PlayerIndex { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerIndex);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerIndex = reader.ReadByte();
+    }
+}
+
+public class PlayerFinishedSyncMessage : INetMessage
 {
     public int PlayerIndex { get; set; }
 

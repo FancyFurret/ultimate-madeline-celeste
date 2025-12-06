@@ -207,11 +207,21 @@ public class PlacingPhase
             (float)Math.Round(position.Y / 8f) * 8f
         );
 
+        // Check if placement is blocked
+        var topLeft = GetTopLeftFromCursor(snappedPos, propInstance);
+        var propSize = propInstance.Prop.GetSize(propInstance.Rotation);
+        if (PlacementBlocker.IsBlocked(_level, topLeft, (int)propSize.X, (int)propSize.Y))
+        {
+            // Play error sound and reject placement
+            Audio.Play("event:/ui/main/button_invalid");
+            UmcLogger.Info($"Player {player.Name} tried to place in blocked area");
+            return;
+        }
+
         // Handle two-stage placement
         if (propInstance.IsTwoStage && !_inSecondStage.Contains(player))
         {
             // First stage: lock start position, move to second stage
-            var topLeft = GetTopLeftFromCursor(snappedPos, propInstance);
             propInstance.SetPosition(topLeft);
             _firstStagePositions[player] = topLeft;
             _inSecondStage.Add(player);

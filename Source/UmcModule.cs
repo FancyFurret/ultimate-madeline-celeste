@@ -133,6 +133,7 @@ public class UmcModule : EverestModule
 
         // Platforming phase messages
         messages.Register<PlayerDeathSyncMessage>();
+        messages.Register<PlayerFinishedSyncMessage>();
         messages.Register<PlatformingCompleteMessage>();
 
         // Register entity factories

@@ -1,4 +1,5 @@
 using System;
+using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Microsoft.Xna.Framework;
 using Monocle;
 
@@ -19,6 +20,10 @@ public class PlacingOverlay : Entity
     private static readonly Color GridLineColor = new Color(80, 200, 220);
     private static readonly Color GridLineMajorColor = new Color(120, 240, 255);
     private static readonly Color OverlayColor = new Color(10, 15, 25);
+
+    // Blocked area colors
+    private static readonly Color BlockedFillColor = new Color(180, 50, 50);
+    private static readonly Color BlockedLineColor = new Color(255, 80, 80);
 
     private float _fadeProgress;
     private float _gridPulse;
@@ -109,6 +114,9 @@ public class PlacingOverlay : Entity
 
         // Draw placement grid
         DrawGrid(visibleArea, ease);
+
+        // Draw blocked areas
+        DrawBlockedAreas(ease);
     }
 
     private void DrawOverlay(Rectangle visibleArea, float ease)
@@ -203,6 +211,39 @@ public class PlacingOverlay : Entity
             _levelBounds.Height,
             boundsColor
         );
+    }
+
+    private void DrawBlockedAreas(float ease)
+    {
+        if (_level == null) return;
+
+        float fillAlpha = 0.25f * ease;
+        float lineAlpha = 0.6f * ease;
+        float pulseAmount = (float)Math.Sin(_gridPulse * 2f) * 0.1f;
+
+        foreach (var entity in _level.Tracker.GetEntities<PlacementBlocker>())
+        {
+            if (entity is not PlacementBlocker blocker) continue;
+
+            var rect = new Rectangle(
+                (int)blocker.Position.X,
+                (int)blocker.Position.Y,
+                (int)blocker.Width,
+                (int)blocker.Height
+            );
+
+            // Fill with pulsing red
+            Draw.Rect(
+                rect.X,
+                rect.Y,
+                rect.Width,
+                rect.Height,
+                BlockedFillColor * (fillAlpha + pulseAmount)
+            );
+
+            // Border
+            Draw.HollowRect(rect.X, rect.Y, rect.Width, rect.Height, BlockedLineColor * lineAlpha);
+        }
     }
 }
 
