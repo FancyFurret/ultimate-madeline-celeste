@@ -135,7 +135,6 @@ public class RoundSettings
             Solo = 0.6f
         },
         PartyBoxItemCount = 5,
-        // Guarantee at least 2 deadly, 1 block - remaining 2 slots are random
         MinimumPerCategory = new Dictionary<PropCategory, int>
         {
             { PropCategory.Deadly, 1 },
@@ -154,8 +153,8 @@ public class RoundSettings
             new(PropRegistry.SpikesLong, 1.2f),
 
             // Deadly blocks - Lava
-            new(PropRegistry.Lava2x2, 1.0f),
-            new(PropRegistry.Lava3x3, 0.8f),
+            // new(PropRegistry.Lava2x2, 1.0f),
+            // new(PropRegistry.Lava3x3, 0.8f),
             new(PropRegistry.Lava3x1, 1.5f),
             new(PropRegistry.Lava5x1, 1.2f),
             new(PropRegistry.Lava8x1, 0.8f),
@@ -163,9 +162,9 @@ public class RoundSettings
             // Deadly blocks - Ice
             new(PropRegistry.Ice2x2, 1.0f),
             new(PropRegistry.Ice3x3, 0.8f),
-            new(PropRegistry.Ice3x1, 1.5f),
-            new(PropRegistry.Ice5x1, 1.2f),
-            new(PropRegistry.Ice8x1, 0.8f),
+            // new(PropRegistry.Ice3x1, 1.5f),
+            // new(PropRegistry.Ice5x1, 1.2f),
+            // new(PropRegistry.Ice8x1, 0.8f),
 
             // Other hazards
             new(PropRegistry.FireBar, 0.8f),
