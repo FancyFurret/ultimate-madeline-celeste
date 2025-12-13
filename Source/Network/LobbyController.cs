@@ -186,10 +186,15 @@ public class LobbyController
         }
 
         // Send host-controlled gameplay settings as part of lobby state.
-        var extras = session.ExtraLivesBySlot ?? Array.Empty<int>();
-        var extrasBytes = new byte[extras.Length];
-        for (int i = 0; i < extras.Length; i++)
-            extrasBytes[i] = (byte)Math.Clamp(extras[i], 0, 255);
+        const int maxSlots = 8;
+        var extrasBytes = new byte[maxSlots];
+        for (int i = 0; i < maxSlots; i++)
+        {
+            int extra = 0;
+            if (session.ExtraLivesBySlot != null && session.ExtraLivesBySlot.TryGetValue(i, out var v))
+                extra = v;
+            extrasBytes[i] = (byte)Math.Clamp(extra, 0, 255);
+        }
 
         var message = new LobbyStateMessage
         {
@@ -221,7 +226,7 @@ public class LobbyController
         var session = GameSession.Instance;
         if (session != null)
         {
-            var extras = new int[message.ExtraLivesBySlot?.Length ?? 0];
+            var extras = new Dictionary<int, int>();
             if (message.ExtraLivesBySlot != null)
             {
                 for (int i = 0; i < message.ExtraLivesBySlot.Length; i++)

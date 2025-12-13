@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Xna.Framework.Input;
 
 namespace Celeste.Mod.UltimateMadelineCeleste;
@@ -14,16 +15,10 @@ public class UmcSettings : EverestModuleSettings
     public int DefaultLives { get; set; } = 1;
 
     /// <summary>
-    /// Handicap: extra lives granted per player slot (1-indexed in the UI).
+    /// Handicap: extra lives granted per player slot index (0-based).
+    /// Keys are player slot indices; values are additional lives (clamped to >= 0).
     /// </summary>
-    public int ExtraLivesSlot1 { get; set; } = 0;
-    public int ExtraLivesSlot2 { get; set; } = 0;
-    public int ExtraLivesSlot3 { get; set; } = 0;
-    public int ExtraLivesSlot4 { get; set; } = 0;
-    public int ExtraLivesSlot5 { get; set; } = 0;
-    public int ExtraLivesSlot6 { get; set; } = 0;
-    public int ExtraLivesSlot7 { get; set; } = 0;
-    public int ExtraLivesSlot8 { get; set; } = 0;
+    public Dictionary<int, int> ExtraLivesBySlot { get; set; } = new();
 
     public bool Enabled
     {
@@ -51,20 +46,8 @@ public class UmcSettings : EverestModuleSettings
 
     public int GetExtraLivesForSlot(int slotIndex)
     {
-        // slotIndex is 0-based internally, while settings are 1-based for readability.
-        int extra = slotIndex switch
-        {
-            0 => ExtraLivesSlot1,
-            1 => ExtraLivesSlot2,
-            2 => ExtraLivesSlot3,
-            3 => ExtraLivesSlot4,
-            4 => ExtraLivesSlot5,
-            5 => ExtraLivesSlot6,
-            6 => ExtraLivesSlot7,
-            7 => ExtraLivesSlot8,
-            _ => 0
-        };
-
+        if (ExtraLivesBySlot == null) return 0;
+        if (!ExtraLivesBySlot.TryGetValue(slotIndex, out var extra)) return 0;
         return extra < 0 ? 0 : extra;
     }
 }

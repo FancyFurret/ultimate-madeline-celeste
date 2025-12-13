@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Phases;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
@@ -30,7 +32,7 @@ public class GameSession
     /// <summary>
     /// Host-controlled: extra lives per player slot index (0-based).
     /// </summary>
-    public int[] ExtraLivesBySlot { get; private set; } = new int[8];
+    public Dictionary<int, int> ExtraLivesBySlot { get; private set; } = new();
 
     private GameSession() { }
 
@@ -46,40 +48,32 @@ public class GameSession
         UmcLogger.Info("GameSession started");
     }
 
-    public void ConfigureLives(int defaultLives, int[] extraLivesBySlot)
+    public void ConfigureLives(int defaultLives, Dictionary<int, int> extraLivesBySlot)
     {
         DefaultLives = Math.Max(1, defaultLives);
-        ExtraLivesBySlot = new int[extraLivesBySlot?.Length ?? 0];
-        if (extraLivesBySlot != null)
-        {
-            for (int i = 0; i < extraLivesBySlot.Length; i++)
-            {
-                ExtraLivesBySlot[i] = Math.Max(0, extraLivesBySlot[i]);
-            }
-        }
+        ExtraLivesBySlot = extraLivesBySlot?
+            .Where(kvp => kvp.Key >= 0)
+            .ToDictionary(kvp => kvp.Key, kvp => Math.Max(0, kvp.Value))
+            ?? new Dictionary<int, int>();
     }
 
     public void ConfigureLivesFromSettings(UmcSettings settings)
     {
         if (settings == null)
         {
-            ConfigureLives(defaultLives: 1, extraLivesBySlot: Array.Empty<int>());
+            ConfigureLives(defaultLives: 1, extraLivesBySlot: new Dictionary<int, int>());
             return;
         }
 
-        var extras = new int[8];
-        for (int i = 0; i < extras.Length; i++)
-            extras[i] = settings.GetExtraLivesForSlot(i);
-
-        ConfigureLives(settings.DefaultLives, extras);
+        ConfigureLives(settings.DefaultLives, settings.ExtraLivesBySlot);
     }
 
     public int GetStartingLivesForSlot(int slotIndex)
     {
         int baseLives = Math.Max(1, DefaultLives);
         int extra = 0;
-        if (ExtraLivesBySlot != null && slotIndex >= 0 && slotIndex < ExtraLivesBySlot.Length)
-            extra = Math.Max(0, ExtraLivesBySlot[slotIndex]);
+        if (ExtraLivesBySlot != null && ExtraLivesBySlot.TryGetValue(slotIndex, out var v))
+            extra = Math.Max(0, v);
         return baseLives + extra;
     }
 
