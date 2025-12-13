@@ -27,6 +27,11 @@ public class RoundState
     public Dictionary<int, PlayerRoundStats> PlayerStats { get; } = new();
 
     /// <summary>
+    /// Lives remaining for each player slot index.
+    /// </summary>
+    public Dictionary<int, int> LivesRemaining { get; } = new();
+
+    /// <summary>
     /// Props placed this round, with their owner's slot index.
     /// </summary>
     public List<PlacedProp> PlacedProps { get; } = new();
@@ -60,6 +65,7 @@ public class RoundState
             HasStarted = true,
             HasEnded = false,
         };
+        Current.InitializeLivesForRound();
         UmcLogger.Info("Round started");
     }
 
@@ -89,9 +95,49 @@ public class RoundState
         // Clear placed props for new round
         PlacedProps.Clear();
 
+        InitializeLivesForRound();
+
         HasEnded = false;
         HasStarted = true;
         UmcLogger.Info($"Starting round {RoundNumber}");
+    }
+
+    public void InitializeLivesForRound()
+    {
+        LivesRemaining.Clear();
+
+        var session = GameSession.Instance;
+        if (session == null) return;
+
+        foreach (var player in session.Players.All)
+        {
+            LivesRemaining[player.SlotIndex] = session.GetStartingLivesForSlot(player.SlotIndex);
+        }
+    }
+
+    public int GetLivesRemaining(UmcPlayer player)
+    {
+        if (player == null) return 0;
+        return LivesRemaining.TryGetValue(player.SlotIndex, out var lives) ? lives : 0;
+    }
+
+    public void SetLivesRemaining(int slotIndex, int lives)
+    {
+        LivesRemaining[slotIndex] = lives < 0 ? 0 : lives;
+    }
+
+    /// <summary>
+    /// Consumes one life and returns the new lives remaining.
+    /// </summary>
+    public int ConsumeLife(UmcPlayer player)
+    {
+        if (player == null) return 0;
+
+        int current = GetLivesRemaining(player);
+        int next = current - 1;
+        if (next < 0) next = 0;
+        LivesRemaining[player.SlotIndex] = next;
+        return next;
     }
 
     /// <summary>
@@ -110,12 +156,12 @@ public class RoundState
     /// <summary>
     /// Records a death for a player.
     /// </summary>
-    public void RecordPlayerDeath(UmcPlayer player, int? killerSlotIndex = null)
+    public void RecordPlayerDeath(UmcPlayer player, bool eliminated, int? killerSlotIndex = null)
     {
         var stats = GetPlayerStats(player);
         stats.Deaths++;
-        stats.DiedThisRound = true;
-        UmcLogger.Info($"Player {player.Name} died (total deaths: {stats.Deaths})");
+        stats.DiedThisRound = eliminated;
+        UmcLogger.Info($"Player {player.Name} died (total deaths: {stats.Deaths}, eliminated: {eliminated})");
 
         // If killed by another player's trap, record the kill
         if (killerSlotIndex.HasValue && killerSlotIndex.Value != player.SlotIndex)

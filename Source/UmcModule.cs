@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
@@ -56,6 +56,7 @@ public class UmcModule : EverestModule
         InputHandler.Enable();
         PauseMenuExtensions.Load();
         OnlinePlayersOverlay.Load();
+        PlayerLivesOverlay.Load();
 
         PlayerSpawner.Load();
         CameraController.Load();
@@ -75,6 +76,7 @@ public class UmcModule : EverestModule
         PauseMenuExtensions.Unload();
         PhaseManager.Unload();
         OnlinePlayersOverlay.Unload();
+        PlayerLivesOverlay.Unload();
 
         PlayerSpawner.Unload();
         CameraController.Unload();

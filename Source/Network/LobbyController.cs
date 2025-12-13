@@ -185,7 +185,23 @@ public class LobbyController
             });
         }
 
-        var message = new LobbyStateMessage { Players = playerMessages };
+        // Send host-controlled gameplay settings as part of lobby state.
+        const int maxSlots = 8;
+        var extrasBytes = new byte[maxSlots];
+        for (int i = 0; i < maxSlots; i++)
+        {
+            int extra = 0;
+            if (session.ExtraLivesBySlot != null && session.ExtraLivesBySlot.TryGetValue(i, out var v))
+                extra = v;
+            extrasBytes[i] = (byte)Math.Clamp(extra, 0, 255);
+        }
+
+        var message = new LobbyStateMessage
+        {
+            Players = playerMessages,
+            DefaultLives = (byte)Math.Clamp(session.DefaultLives, 1, 255),
+            ExtraLivesBySlot = extrasBytes
+        };
         NetworkManager.Instance?.Messages.SendTo(message, steamId);
         UmcLogger.Info($"Sent lobby state to {SteamManager.GetPlayerName(steamId)}");
     }
@@ -205,6 +221,19 @@ public class LobbyController
 
         var players = GameSession.Instance?.Players;
         if (players == null) return;
+
+        // Apply host-controlled settings.
+        var session = GameSession.Instance;
+        if (session != null)
+        {
+            var extras = new Dictionary<int, int>();
+            if (message.ExtraLivesBySlot != null)
+            {
+                for (int i = 0; i < message.ExtraLivesBySlot.Length; i++)
+                    extras[i] = message.ExtraLivesBySlot[i];
+            }
+            session.ConfigureLives(message.DefaultLives, extras);
+        }
 
         players.Clear();
 
