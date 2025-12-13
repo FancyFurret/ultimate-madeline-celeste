@@ -273,8 +273,42 @@ public class PlayerRemovedMessage : INetMessage
 public class LobbyStateMessage : INetMessage
 {
     public List<PlayerAddedMessage> Players { get; set; } = new();
-    public void Serialize(BinaryWriter writer) { writer.Write((byte)Players.Count); foreach (var p in Players) p.Serialize(writer); }
-    public void Deserialize(BinaryReader reader) { int c = reader.ReadByte(); Players = new(c); for (int i = 0; i < c; i++) { var p = new PlayerAddedMessage(); p.Deserialize(reader); Players.Add(p); } }
+
+    // Host-controlled gameplay settings
+    public byte DefaultLives { get; set; } = 1;
+    public byte[] ExtraLivesBySlot { get; set; } = Array.Empty<byte>();
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)Players.Count);
+        foreach (var p in Players) p.Serialize(writer);
+
+        writer.Write(DefaultLives);
+        writer.Write((byte)(ExtraLivesBySlot?.Length ?? 0));
+        if (ExtraLivesBySlot != null)
+        {
+            for (int i = 0; i < ExtraLivesBySlot.Length; i++)
+                writer.Write(ExtraLivesBySlot[i]);
+        }
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        int c = reader.ReadByte();
+        Players = new(c);
+        for (int i = 0; i < c; i++)
+        {
+            var p = new PlayerAddedMessage();
+            p.Deserialize(reader);
+            Players.Add(p);
+        }
+
+        DefaultLives = reader.ReadByte();
+        int extraLen = reader.ReadByte();
+        ExtraLivesBySlot = new byte[extraLen];
+        for (int i = 0; i < extraLen; i++)
+            ExtraLivesBySlot[i] = reader.ReadByte();
+    }
 }
 
 public enum PlayerEventType : byte { Death = 0, Respawn = 1, Dash = 2, Jump = 3, WallJump = 4, Climb = 5, Custom = 255 }

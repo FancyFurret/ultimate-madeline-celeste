@@ -121,6 +121,7 @@ public class NetworkManager
 
         UmcLogger.Info("Starting local session");
         GameSession.Start();
+        GameSession.Instance?.ConfigureLivesFromSettings(UmcModule.Settings);
         OnConnected?.Invoke();
     }
 

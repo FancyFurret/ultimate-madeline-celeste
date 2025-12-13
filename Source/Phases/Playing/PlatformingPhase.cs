@@ -16,9 +16,11 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Playing;
 public class PlatformingPhase
 {
     private const float AllDeadTransitionDelay = 1f;
+    private const float RemoteRespawnDelay = 0.35f;
     private readonly HashSet<UmcPlayerDeadBody> _customDeadBodies = new();
     private readonly HashSet<UmcPlayer> _deadPlayers = new();
     private readonly HashSet<UmcPlayer> _finishedPlayers = new();
+    private readonly Dictionary<UmcPlayer, float> _pendingRespawns = new();
     private float _allDeadTimer;
     private static PlatformingPhase _instance;
     private BerryManager _berryManager;
@@ -72,6 +74,8 @@ public class PlatformingPhase
 
     public void Update()
     {
+        TickPendingRespawns();
+
         // Only host controls the transition
         if (!IsHost) return;
 
@@ -157,9 +161,18 @@ public class PlatformingPhase
         // Track the custom dead body
         _instance._customDeadBodies.Add(customDeadBody);
 
-        // Mark player as dead
-        _instance._deadPlayers.Add(umcPlayer);
-        UmcLogger.Info($"Player {umcPlayer.Name} died");
+        // Consume a life and decide whether they're eliminated for the round.
+        var round = RoundState.Current;
+        int livesRemaining = round?.ConsumeLife(umcPlayer) ?? 0;
+        bool eliminated = livesRemaining <= 0;
+        round?.RecordPlayerDeath(umcPlayer, eliminated);
+
+        if (eliminated)
+        {
+            _instance._deadPlayers.Add(umcPlayer);
+        }
+
+        UmcLogger.Info($"Player {umcPlayer.Name} died (lives remaining: {livesRemaining}, eliminated: {eliminated})");
 
         // Track the dead body with camera, untrack when animation completes
         CameraController.Instance?.TrackEntity(customDeadBody);
@@ -167,6 +180,14 @@ public class PlatformingPhase
         {
             CameraController.Instance?.UntrackEntity(customDeadBody);
             _instance?.UntrackPlayer(umcPlayer);
+
+            // If the player still has lives, respawn them and clean up the temporary body.
+            if (!eliminated)
+            {
+                customDeadBody.Cleanup();
+                _instance?._customDeadBodies.Remove(customDeadBody);
+                _instance?.RespawnPlayer(umcPlayer);
+            }
         };
 
         // Berry dropping is handled by UmcBerry.OnLoseLeader
@@ -176,7 +197,9 @@ public class PlatformingPhase
         {
             NetworkManager.Broadcast(new PlayerDeathSyncMessage
             {
-                PlayerIndex = umcPlayer.SlotIndex
+                PlayerIndex = umcPlayer.SlotIndex,
+                LivesRemaining = (byte)MathHelper.Clamp(livesRemaining, 0, 255),
+                Eliminated = eliminated
             });
         }
 
@@ -293,16 +316,63 @@ public class PlatformingPhase
         var player = session.Players.GetAtSlot(message.PlayerIndex);
         if (player == null) return;
 
-        // Don't double-count if already dead
-        if (_deadPlayers.Contains(player)) return;
+        // Deduplicate: if we already have this exact state, ignore.
+        var round = RoundState.Current;
+        int prevLives = round?.GetLivesRemaining(player) ?? -1;
+        bool prevEliminated = prevLives <= 0 && prevLives != -1;
+        if (prevLives == message.LivesRemaining && prevEliminated == message.Eliminated)
+            return;
 
-        _deadPlayers.Add(player);
-        UmcLogger.Info($"Synced death for player {player.Name}");
+        // Apply authoritative lives value from sender.
+        round?.SetLivesRemaining(message.PlayerIndex, message.LivesRemaining);
+        round?.RecordPlayerDeath(player, message.Eliminated);
+
+        if (message.Eliminated)
+        {
+            // Don't double-count if already eliminated
+            if (_deadPlayers.Contains(player)) return;
+            _deadPlayers.Add(player);
+        }
+        else
+        {
+            _deadPlayers.Remove(player);
+        }
+
+        UmcLogger.Info($"Synced death for player {player.Name} (lives remaining: {message.LivesRemaining}, eliminated: {message.Eliminated})");
 
         // Despawn the remote player so they're no longer visible or tracked by camera
         PlayerSpawner.Instance?.DespawnPlayer(player);
 
+        // If they still have lives, schedule a respawn on this client.
+        if (!message.Eliminated)
+        {
+            _pendingRespawns[player] = RemoteRespawnDelay;
+        }
+
         CheckAllPlayersDead();
+    }
+
+    private void TickPendingRespawns()
+    {
+        if (_pendingRespawns.Count == 0) return;
+
+        var level = Engine.Scene as Level;
+        var spawner = PlayerSpawner.Instance;
+        if (level == null || spawner == null) return;
+
+        var toRespawn = new List<UmcPlayer>();
+        foreach (var kvp in _pendingRespawns)
+        {
+            float t = kvp.Value - Engine.DeltaTime;
+            if (t <= 0f) toRespawn.Add(kvp.Key);
+            else _pendingRespawns[kvp.Key] = t;
+        }
+
+        foreach (var p in toRespawn)
+        {
+            _pendingRespawns.Remove(p);
+            RespawnPlayer(p);
+        }
     }
 
     private void HandlePlayerFinishedSync(CSteamID sender, PlayerFinishedSyncMessage message)
@@ -341,15 +411,21 @@ public class PlatformingPhase
 public class PlayerDeathSyncMessage : INetMessage
 {
     public int PlayerIndex { get; set; }
+    public byte LivesRemaining { get; set; }
+    public bool Eliminated { get; set; }
 
     public void Serialize(BinaryWriter writer)
     {
         writer.Write((byte)PlayerIndex);
+        writer.Write(LivesRemaining);
+        writer.Write(Eliminated);
     }
 
     public void Deserialize(BinaryReader reader)
     {
         PlayerIndex = reader.ReadByte();
+        LivesRemaining = reader.ReadByte();
+        Eliminated = reader.ReadBoolean();
     }
 }
 
