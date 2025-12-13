@@ -62,7 +62,7 @@ public class GoalFlag : Entity
             {
                 var spawner = PlayerSpawner.Instance;
                 var umcPlayer = spawner?.GetUmcPlayer(p);
-                if (umcPlayer != null)
+                if (umcPlayer != null && !umcPlayer.InDanceMode)
                 {
                     TriggerGoalReached(umcPlayer);
                 }
@@ -71,8 +71,8 @@ public class GoalFlag : Entity
 
         // Check remote players
         foreach (var entity in level.Tracker.GetEntities<RemotePlayer>())
-        {
-            if (entity is RemotePlayer remote && !remote.Dead && CollideCheck(remote))
+        { 
+            if (entity is RemotePlayer remote && !remote.Dead && !remote.UmcPlayer.InDanceMode && CollideCheck(remote))
             {
                 TriggerGoalReached(remote.UmcPlayer);
             }
@@ -82,6 +82,13 @@ public class GoalFlag : Entity
     private void TriggerGoalReached(UmcPlayer player)
     {
         UmcLogger.Info($"Player {player.Name} reached the goal!");
+
+        // Spawn confetti at the flag
+        Scene.Add(new SummitCheckpoint.ConfettiRenderer(Position));
+
+        // Put player in dance mode (can change direction but not move)
+        player.SetDanceMode(true);
+
         OnPlayerReachedGoal?.Invoke(player);
     }
 

@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Celeste.Mod.MotionSmoothing.Utilities;
-using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -9,7 +7,8 @@ using Monocle;
 namespace Celeste.Mod.UltimateMadelineCeleste.Players;
 
 /// <summary>
-/// Controls the camera in multiplayer to keep all players visible.
+/// Controls the camera to keep tracked entities visible.
+/// Phases are responsible for adding/removing entities to track.
 /// </summary>
 public class CameraController : HookedFeature<CameraController>
 {
@@ -33,7 +32,10 @@ public class CameraController : HookedFeature<CameraController>
     private Vector2? _focusOverride;
     private float _focusZoom = 1f;
 
-    // External entities to track (weak references so we don't prevent GC)
+    // Default position to use when no entities are tracked
+    private Vector2? _defaultPosition;
+
+    // Entities to track (weak references so we don't prevent GC)
     private readonly List<WeakReference<Entity>> _trackedEntities = new();
 
     /// <summary>
@@ -58,6 +60,22 @@ public class CameraController : HookedFeature<CameraController>
     /// Whether a focus override is currently active.
     /// </summary>
     public bool HasFocusOverride => _focusOverride.HasValue;
+
+    /// <summary>
+    /// Sets a default position to use when no entities are tracked.
+    /// </summary>
+    public void SetDefaultPosition(Vector2 position)
+    {
+        _defaultPosition = position;
+    }
+
+    /// <summary>
+    /// Clears the default position.
+    /// </summary>
+    public void ClearDefaultPosition()
+    {
+        _defaultPosition = null;
+    }
 
     /// <summary>
     /// Adds an entity for the camera to track. Uses weak reference so it won't prevent GC.
@@ -85,6 +103,14 @@ public class CameraController : HookedFeature<CameraController>
 
         _trackedEntities.RemoveAll(weakRef =>
             !weakRef.TryGetTarget(out var target) || target == entity);
+    }
+
+    /// <summary>
+    /// Clears all tracked entities.
+    /// </summary>
+    public void ClearTrackedEntities()
+    {
+        _trackedEntities.Clear();
     }
 
     protected override void Hook()
@@ -127,9 +153,15 @@ public class CameraController : HookedFeature<CameraController>
 
     private void OnLevelUpdate(On.Celeste.Level.orig_Update orig, Level self)
     {
+        bool isMultiplayer = PlayerSpawner.Instance?.IsMultiplayerLevel ?? false;
+
+        // In multiplayer, save camera state before vanilla update so we can discard vanilla's changes
+        Vector2 savedCameraPos = self.Camera.Position;
+        float savedZoom = self.Zoom;
+
         orig(self);
 
-        if (!PlayerSpawner.Instance?.IsMultiplayerLevel ?? true)
+        if (!isMultiplayer)
         {
             if (_isControlling)
             {
@@ -139,6 +171,10 @@ public class CameraController : HookedFeature<CameraController>
             }
             return;
         }
+
+        // Restore camera state - discard whatever vanilla did
+        self.Camera.Position = savedCameraPos;
+        self.Zoom = savedZoom;
 
         UpdateCamera(self);
     }
@@ -165,15 +201,23 @@ public class CameraController : HookedFeature<CameraController>
             return;
         }
 
-        var positions = GetAllCameraTargets(level);
+        var positions = GetTrackedPositions();
 
+        // If no tracked entities, use default position if set
         if (positions.Count == 0)
         {
-            _isControlling = false;
-            return;
+            if (_defaultPosition.HasValue)
+            {
+                positions.Add(_defaultPosition.Value);
+            }
+            else
+            {
+                _isControlling = false;
+                return;
+            }
         }
 
-        var bounds = CalculatePlayerBounds(positions);
+        var bounds = CalculateBounds(positions);
         _targetZoom = CalculateRequiredZoom(bounds);
         _currentZoom = MathHelper.Lerp(_currentZoom, _targetZoom, ZoomLerpSpeed * Engine.DeltaTime);
         _targetCameraPos = CalculateCameraPosition(bounds, level);
@@ -188,43 +232,28 @@ public class CameraController : HookedFeature<CameraController>
         _isControlling = true;
     }
 
-    private List<Vector2> GetAllCameraTargets(Level level)
+    private List<Vector2> GetTrackedPositions()
     {
         var positions = new List<Vector2>();
-        var spawner = PlayerSpawner.Instance;
 
-        if (spawner == null) return positions;
-
-        foreach (var kvp in spawner.LocalPlayers)
-        {
-            var player = kvp.Value;
-            if (player?.Scene != null)
-                positions.Add(player.Center);
-        }
-
-        foreach (var kvp in spawner.RemotePlayers)
-        {
-            var remote = kvp.Value;
-            if (remote?.Scene != null)
-                positions.Add(remote.Position);
-        }
-
-        // Get positions from tracked entities (clean up dead refs as we go)
+        // Clean up dead refs and collect positions
         for (int i = _trackedEntities.Count - 1; i >= 0; i--)
         {
             if (_trackedEntities[i].TryGetTarget(out var entity))
             {
                 if (entity.Scene != null && entity.Visible && entity.Active)
-                    positions.Add(entity.Position);
+                    positions.Add(entity.Center);
             }
             else
+            {
                 _trackedEntities.RemoveAt(i);
+            }
         }
 
         return positions;
     }
 
-    private static RectangleF CalculatePlayerBounds(List<Vector2> positions)
+    private static RectangleF CalculateBounds(List<Vector2> positions)
     {
         if (positions.Count == 0)
             return new RectangleF(0, 0, ScreenWidth, ScreenHeight);

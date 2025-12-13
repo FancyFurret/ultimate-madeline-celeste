@@ -312,6 +312,9 @@ public class PlacingPhase
             UmcLogger.Info($"Player {player.Name} placed {propInstance.Prop.Name} at {targetTopLeft}");
         }
 
+        // Register prop ownership for trap kill tracking
+        RoundState.Current?.RegisterPlacedProp(propInstance, player.SlotIndex);
+
         _placedPlayers.Add(player);
         _inSecondStage.Remove(player);
         _firstStagePositions.Remove(player);

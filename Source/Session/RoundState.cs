@@ -1,6 +1,10 @@
 using System.Collections.Generic;
+using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
+using Celeste.Mod.UltimateMadelineCeleste.Props;
+using Celeste.Mod.UltimateMadelineCeleste.Scoring;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
+using Monocle;
 
 namespace Celeste.Mod.UltimateMadelineCeleste.Session;
 
@@ -23,6 +27,11 @@ public class RoundState
     public Dictionary<int, PlayerRoundStats> PlayerStats { get; } = new();
 
     /// <summary>
+    /// Props placed this round, with their owner's slot index.
+    /// </summary>
+    public List<PlacedProp> PlacedProps { get; } = new();
+
+    /// <summary>
     /// Whether the round has started (players can move).
     /// </summary>
     public bool HasStarted { get; private set; }
@@ -31,6 +40,16 @@ public class RoundState
     /// Whether the round has ended (win/lose condition met).
     /// </summary>
     public bool HasEnded { get; private set; }
+
+    /// <summary>
+    /// The current round number (1-indexed).
+    /// </summary>
+    public int RoundNumber { get; private set; } = 1;
+
+    /// <summary>
+    /// Tracks the order players finished (first finisher = 0).
+    /// </summary>
+    private int _finishOrderCounter = 0;
 
 
     public static void Start(string mapSID)
@@ -54,6 +73,28 @@ public class RoundState
     }
 
     /// <summary>
+    /// Advances to the next round.
+    /// </summary>
+    public void NextRound()
+    {
+        RoundNumber++;
+        _finishOrderCounter = 0;
+
+        // Reset round-specific stats but keep cumulative scores
+        foreach (var stats in PlayerStats.Values)
+        {
+            stats.ResetForNewRound();
+        }
+
+        // Clear placed props for new round
+        PlacedProps.Clear();
+
+        HasEnded = false;
+        HasStarted = true;
+        UmcLogger.Info($"Starting round {RoundNumber}");
+    }
+
+    /// <summary>
     /// Gets or creates stats for a player.
     /// </summary>
     public PlayerRoundStats GetPlayerStats(UmcPlayer player)
@@ -69,11 +110,194 @@ public class RoundState
     /// <summary>
     /// Records a death for a player.
     /// </summary>
-    public void RecordPlayerDeath(UmcPlayer player)
+    public void RecordPlayerDeath(UmcPlayer player, int? killerSlotIndex = null)
     {
         var stats = GetPlayerStats(player);
         stats.Deaths++;
+        stats.DiedThisRound = true;
         UmcLogger.Info($"Player {player.Name} died (total deaths: {stats.Deaths})");
+
+        // If killed by another player's trap, record the kill
+        if (killerSlotIndex.HasValue && killerSlotIndex.Value != player.SlotIndex)
+        {
+            RecordTrapKill(killerSlotIndex.Value);
+        }
+    }
+
+    /// <summary>
+    /// Records a trap kill for the owner of a prop.
+    /// </summary>
+    public void RecordTrapKill(int killerSlotIndex)
+    {
+        if (!PlayerStats.TryGetValue(killerSlotIndex, out var stats))
+        {
+            stats = new PlayerRoundStats(killerSlotIndex);
+            PlayerStats[killerSlotIndex] = stats;
+        }
+
+        stats.TrapKillsThisRound++;
+        stats.TotalTrapKills++;
+        UmcLogger.Info($"Player at slot {killerSlotIndex} got a trap kill! (total: {stats.TotalTrapKills}, this round: {stats.TrapKillsThisRound})");
+    }
+
+    /// <summary>
+    /// Records that a player finished the level.
+    /// </summary>
+    public void RecordPlayerFinished(UmcPlayer player)
+    {
+        var stats = GetPlayerStats(player);
+        if (stats.FinishedThisRound) return;
+
+        stats.FinishedThisRound = true;
+        stats.FinishOrder = _finishOrderCounter++;
+        UmcLogger.Info($"Player {player.Name} finished (order: {stats.FinishOrder})");
+    }
+
+    /// <summary>
+    /// Records that a player collected a strawberry.
+    /// </summary>
+    public void RecordBerryCollected(UmcPlayer player)
+    {
+        var stats = GetPlayerStats(player);
+        stats.BerriesThisRound++;
+        stats.TotalBerries++;
+        UmcLogger.Info($"Player {player.Name} collected a berry! (total: {stats.TotalBerries}, this round: {stats.BerriesThisRound})");
+    }
+
+    /// <summary>
+    /// Returns true if everyone who didn't die finished the level.
+    /// Used for "Too Easy! No Points!" detection.
+    /// </summary>
+    public bool DidEveryoneFinish()
+    {
+        var players = GameSession.Instance?.Players.All;
+        if (players == null || players.Count == 0) return false;
+
+        foreach (var player in players)
+        {
+            var stats = GetPlayerStats(player);
+            // If someone didn't finish and didn't die, return false
+            if (!stats.FinishedThisRound && !stats.DiedThisRound)
+                return false;
+        }
+
+        // Check if at least one person finished
+        return PlayerStats.Values.Any(s => s.FinishedThisRound);
+    }
+
+    /// <summary>
+    /// Returns true if nobody finished the level.
+    /// Used for "No Winners! No Points!" detection.
+    /// </summary>
+    public bool DidNoOneFinish()
+    {
+        return !PlayerStats.Values.Any(s => s.FinishedThisRound);
+    }
+
+    /// <summary>
+    /// Returns all players who finished, ordered by finish order.
+    /// </summary>
+    public IEnumerable<(UmcPlayer player, PlayerRoundStats stats)> GetFinishers()
+    {
+        var session = GameSession.Instance;
+        if (session == null) yield break;
+
+        var finishedStats = PlayerStats.Values
+            .Where(s => s.FinishedThisRound)
+            .OrderBy(s => s.FinishOrder);
+
+        foreach (var stats in finishedStats)
+        {
+            var player = session.Players.GetAtSlot(stats.SlotIndex);
+            if (player != null)
+                yield return (player, stats);
+        }
+    }
+
+    /// <summary>
+    /// Returns the count of players who finished this round.
+    /// </summary>
+    public int GetFinisherCount()
+    {
+        return PlayerStats.Values.Count(s => s.FinishedThisRound);
+    }
+
+    /// <summary>
+    /// Returns the first player to finish, or null if nobody finished.
+    /// </summary>
+    public UmcPlayer GetFirstFinisher()
+    {
+        return GetFinishers().FirstOrDefault().player;
+    }
+
+    /// <summary>
+    /// Checks if a player is an underdog (significantly behind the leader).
+    /// </summary>
+    public bool IsUnderdog(UmcPlayer player)
+    {
+        return true;
+        var stats = GetPlayerStats(player);
+        float leaderScore = PlayerStats.Values.Max(s => s.TotalScore);
+
+        return leaderScore - stats.TotalScore >= ScoringConfig.UnderdogThreshold;
+    }
+
+    /// <summary>
+    /// Checks if any player has won (reached points to win).
+    /// </summary>
+    public UmcPlayer GetWinner()
+    {
+        var session = GameSession.Instance;
+        if (session == null) return null;
+
+        foreach (var stats in PlayerStats.Values)
+        {
+            if (stats.TotalScore >= ScoringConfig.PointsToWin)
+            {
+                return session.Players.GetAtSlot(stats.SlotIndex);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Registers a placed prop with its owner.
+    /// </summary>
+    public void RegisterPlacedProp(PropInstance prop, int ownerSlotIndex)
+    {
+        if (prop?.Entity == null) return;
+
+        PlacedProps.Add(new PlacedProp
+        {
+            Prop = prop,
+            Entity = prop.Entity,
+            OwnerSlotIndex = ownerSlotIndex
+        });
+        UmcLogger.Info($"Registered prop: {prop.Prop.Name} placed by player {ownerSlotIndex}");
+    }
+
+    /// <summary>
+    /// Gets the owner slot index for an entity, or -1 if not found.
+    /// </summary>
+    public int GetPropOwner(Entity entity)
+    {
+        if (entity == null) return -1;
+
+        var placed = PlacedProps.FirstOrDefault(p => p.Entity == entity);
+        return placed?.OwnerSlotIndex ?? -1;
+    }
+
+    /// <summary>
+    /// Records a trap kill if the entity belongs to another player.
+    /// </summary>
+    public void RecordTrapKillFromEntity(Entity killerEntity, UmcPlayer victim)
+    {
+        if (killerEntity == null || victim == null) return;
+
+        var ownerSlot = GetPropOwner(killerEntity);
+        if (ownerSlot < 0 || ownerSlot == victim.SlotIndex) return;
+
+        RecordTrapKill(ownerSlot);
     }
 
     /// <summary>
@@ -90,19 +314,71 @@ public class RoundState
 }
 
 /// <summary>
+/// A prop placed during a round.
+/// </summary>
+public class PlacedProp
+{
+    public PropInstance Prop { get; set; }
+    public Entity Entity { get; set; }
+    public int OwnerSlotIndex { get; set; }
+}
+
+/// <summary>
 /// Per-player statistics for a round.
 /// </summary>
 public class PlayerRoundStats
 {
     public int SlotIndex { get; }
-    public int Deaths { get; set; }
-    public int Score { get; set; }
+
+    // Cumulative stats (persist across rounds) - FLOATS for fractional scoring
+    public float TotalScore { get; set; }
+    public int TotalDeaths { get; set; }
+    public int TotalBerries { get; set; }
+    public int TotalTrapKills { get; set; }
+
+    // All score segments earned (persists across rounds for display)
+    public List<ScoreSegment> ScoreSegments { get; } = new();
+
+    // Legacy property for compatibility
+    public int Deaths
+    {
+        get => TotalDeaths;
+        set => TotalDeaths = value;
+    }
+
+    // Per-round stats (reset each round)
+    public bool FinishedThisRound { get; set; }
+    public bool DiedThisRound { get; set; }
+    public int FinishOrder { get; set; } = -1;
+    public int BerriesThisRound { get; set; }
+    public int TrapKillsThisRound { get; set; }
+    public bool WasUnderdogThisRound { get; set; }
 
     public PlayerRoundStats(int slotIndex)
     {
         SlotIndex = slotIndex;
-        Deaths = 0;
-        Score = 0;
+        ResetForNewRound();
+    }
+
+    /// <summary>
+    /// Adds a score segment to the history.
+    /// </summary>
+    public void AddScoreSegment(ScoreType type, float points)
+    {
+        if (points > 0)
+            ScoreSegments.Add(new ScoreSegment(type, points));
+    }
+
+    /// <summary>
+    /// Resets per-round stats for a new round.
+    /// </summary>
+    public void ResetForNewRound()
+    {
+        FinishedThisRound = false;
+        DiedThisRound = false;
+        FinishOrder = -1;
+        BerriesThisRound = 0;
+        TrapKillsThisRound = 0;
+        WasUnderdogThisRound = false;
     }
 }
-

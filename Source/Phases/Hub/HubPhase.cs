@@ -70,6 +70,7 @@ public class HubPhase : Entity
         }
 
         // Spawn all session players who have skins selected
+        // (spawn methods auto-track with camera)
         if (scene is Level level)
         {
             PlayerSpawner.Instance?.SpawnAllSessionPlayers(level);

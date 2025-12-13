@@ -35,6 +35,30 @@ public class UmcPlayer
     public string SkinId { get; set; }
     public int ColorIndex => SlotIndex;
     public RemotePlayerNetworkState LastNetworkState { get; set; }
+
+    /// <summary>
+    /// When true, player can change facing direction but cannot move.
+    /// </summary>
+    public bool InDanceMode { get; private set; }
+
+    /// <summary>
+    /// When true, player should be hidden (e.g., after someone else wins).
+    /// </summary>
+    public bool IsHidden { get; set; }
+
+    public void SetDanceMode(bool enabled)
+    {
+        InDanceMode = enabled;
+    }
+
+    /// <summary>
+    /// Resets transient state (dance mode, hidden) for lobby return or new game.
+    /// </summary>
+    public void ResetState()
+    {
+        InDanceMode = false;
+        IsHidden = false;
+    }
 }
 
 public class RemotePlayerNetworkState

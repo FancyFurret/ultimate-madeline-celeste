@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using Celeste.Mod.UltimateMadelineCeleste.Props;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
+using Celeste.Mod.UltimateMadelineCeleste.Props;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
@@ -16,7 +16,8 @@ public enum PlayingSubPhase
     Picking,
     Placing,
     Platforming,
-    Scoring
+    Scoring,
+    Resetting
 }
 
 public class PlayingPhase : Entity
@@ -34,6 +35,7 @@ public class PlayingPhase : Entity
     private PlacingPhase _placingPhase;
     private PlatformingPhase _platformingPhase;
     private ScoringPhase _scoringPhase;
+    private LevelResetPhase _resetPhase;
 
     public PlayingPhase(string levelSid)
     {
@@ -74,7 +76,6 @@ public class PlayingPhase : Entity
         _pickingPhase?.Cleanup();
         _pickingPhase = null;
 
-        // Both host and client have the same selections from picking phase
         StartPlacingPhase(playerSelections);
     }
 
@@ -101,9 +102,80 @@ public class PlayingPhase : Entity
 
     private void OnPlatformingPhaseComplete()
     {
-        UmcLogger.Info("Platforming complete - transitioning to picking phase");
-        CleanupAllPhases();
+        UmcLogger.Info("Platforming complete - transitioning to scoring phase");
+        _platformingPhase?.Cleanup();
+        _platformingPhase = null;
+        StartScoringPhase();
+    }
+
+    private void StartScoringPhase()
+    {
+        SubPhase = PlayingSubPhase.Scoring;
+
+        var level = Scene as Level;
+        if (level == null)
+        {
+            UmcLogger.Error("Cannot start scoring phase - no level");
+            OnScoringPhaseComplete();
+            return;
+        }
+
+        _scoringPhase = new ScoringPhase(level);
+        _scoringPhase.OnComplete += OnScoringPhaseComplete;
+        _scoringPhase.OnVictory += OnVictory;
+
+        UmcLogger.Info("Started scoring phase");
+    }
+
+    private void OnScoringPhaseComplete()
+    {
+        UmcLogger.Info("Scoring complete - starting reset phase");
+        _scoringPhase = null;
+
+        StartResetPhase();
+    }
+
+    private void StartResetPhase()
+    {
+        SubPhase = PlayingSubPhase.Resetting;
+
+        var level = Scene as Level;
+        if (level == null)
+        {
+            UmcLogger.Error("Cannot start reset phase - no level");
+            OnResetPhaseComplete();
+            return;
+        }
+
+        _resetPhase = new LevelResetPhase(level);
+        _resetPhase.OnComplete += OnResetPhaseComplete;
+
+        UmcLogger.Info("Started reset phase");
+    }
+
+    private void OnResetPhaseComplete()
+    {
+        UmcLogger.Info("Reset complete - starting next round");
+        _resetPhase?.Cleanup();
+        _resetPhase = null;
+
+        // Advance to next round
+        RoundState.Current?.NextRound();
+
+        // Start next picking phase
         StartPickingPhase();
+    }
+
+    private void OnVictory(UmcPlayer winner)
+    {
+        UmcLogger.Info($"Victory! {winner.Name} wins the game!");
+        _scoringPhase = null;
+
+        // Return to lobby after victory
+        if (IsHost)
+        {
+            ReturnToLobby();
+        }
     }
 
     public override void Removed(Scene scene)
@@ -124,7 +196,11 @@ public class PlayingPhase : Entity
         _platformingPhase?.Cleanup();
         _platformingPhase = null;
 
+        _scoringPhase?.Cleanup();
         _scoringPhase = null;
+
+        _resetPhase?.Cleanup();
+        _resetPhase = null;
 
         UmcLogger.Info("All sub-phases cleaned up");
     }
@@ -147,8 +223,15 @@ public class PlayingPhase : Entity
             case PlayingSubPhase.Platforming:
                 _platformingPhase?.Update();
                 break;
+            case PlayingSubPhase.Scoring:
+                _scoringPhase?.Update();
+                break;
+            case PlayingSubPhase.Resetting:
+                _resetPhase?.Update();
+                break;
         }
     }
+
 
     public void ReturnToLobby()
     {
@@ -164,6 +247,17 @@ public class PlayingPhase : Entity
     private void HandleReturnToLobby(CSteamID sender, ReturnToLobbyMessage message)
     {
         UmcLogger.Info("Returning to lobby...");
+
+        // Reset all player states (dance mode, hidden, etc.)
+        var session = GameSession.Instance;
+        if (session != null)
+        {
+            foreach (var player in session.Players.All)
+            {
+                player.ResetState();
+            }
+        }
+
         CleanupAllPhases();
         PlayerSpawner.Instance?.DespawnAllSessionPlayers();
         PhaseManager.Instance?.TransitionToLobby();

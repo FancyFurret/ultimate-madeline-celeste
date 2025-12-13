@@ -1,7 +1,7 @@
-using Celeste.Mod.SkinModHelper;
 using Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
+using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
 
@@ -77,7 +77,7 @@ public class HubLobbyUi : Entity
                         new Vector2(0.5f), Vector2.One * 0.7f, playerColor);
 
                     string bottomText = !string.IsNullOrEmpty(player.SkinId)
-                        ? (player.SkinId == SkinsSystem.DEFAULT ? "Madeline" : player.SkinId.Replace('_', ' '))
+                        ? SkinHelper.GetDisplayName(player.SkinId)
                         : (player.IsLocal
                             ? (player.Device?.Type == InputDeviceType.Keyboard ? "Keyboard" : $"Controller {(player.Device?.ControllerIndex ?? 0) + 1}")
                             : "Online");

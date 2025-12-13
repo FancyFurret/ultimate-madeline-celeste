@@ -24,7 +24,8 @@ public class PickingPhase
         Picking
     }
 
-    private const float InitialDelay = 2f;
+    private const float FirstRoundDelay = 2f;
+    private const float SubsequentRoundDelay = 0.3f;
     private const int PropCount = 5;
 
     public PickingState State { get; private set; } = PickingState.WaitingToStart;
@@ -79,7 +80,8 @@ public class PickingPhase
         // Only host controls timing
         if (!IsHost) return;
 
-        if (_stateTimer >= InitialDelay)
+        float delay = RoundState.Current?.RoundNumber == 1 ? FirstRoundDelay : SubsequentRoundDelay;
+        if (_stateTimer >= delay)
         {
             StartBoxAnimation();
         }

@@ -16,11 +16,12 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Playing;
 public class PlatformingPhase
 {
     private const float AllDeadTransitionDelay = 1f;
-    private readonly HashSet<PlayerDeadBody> _managedDeadBodies = new();
+    private readonly HashSet<UmcPlayerDeadBody> _customDeadBodies = new();
     private readonly HashSet<UmcPlayer> _deadPlayers = new();
     private readonly HashSet<UmcPlayer> _finishedPlayers = new();
     private float _allDeadTimer;
     private static PlatformingPhase _instance;
+    private BerryManager _berryManager;
 
     public event Action OnComplete;
 
@@ -42,11 +43,29 @@ public class PlatformingPhase
         // Subscribe to goal flag events
         GoalFlag.OnPlayerReachedGoal += HandlePlayerReachedGoal;
 
-        // Now spawn all players
+        // Reset all player states (dance mode, hidden, etc.) before spawning
+        var session = GameSession.Instance;
+        if (session != null)
+        {
+            foreach (var player in session.Players.All)
+            {
+                player.ResetState();
+            }
+        }
+
+        // Clear any tracked entities from previous phase, spawn all players
+        // (spawn methods auto-track with camera)
+        CameraController.Instance?.ClearTrackedEntities();
         PlayerSpawner.Instance?.SpawnAllSessionPlayers(Engine.Scene as Level);
 
+        // Initialize berry manager
+        var level = Engine.Scene as Level;
+        if (level != null)
+        {
+            _berryManager = new BerryManager(level);
+        }
+
         On.Celeste.Player.Die += OnPlayerDie;
-        On.Celeste.PlayerDeadBody.End += OnPlayerDeadBodyEnd;
 
         UmcLogger.Info("Started platforming phase - players spawned");
     }
@@ -86,13 +105,24 @@ public class PlatformingPhase
 
     public void Cleanup()
     {
-        PlayerSpawner.Instance?.DespawnAllSessionPlayers();
+        // Don't despawn players here - keep them for scoring phase victory display
+        // ScoringPhase.Cleanup will despawn them
         On.Celeste.Player.Die -= OnPlayerDie;
-        On.Celeste.PlayerDeadBody.End -= OnPlayerDeadBodyEnd;
+
+        // Clean up custom dead bodies
+        foreach (var deadBody in _customDeadBodies)
+        {
+            deadBody?.Cleanup();
+        }
+        _customDeadBodies.Clear();
 
         // Unsubscribe from goal flag events
         GoalFlag.OnPlayerReachedGoal -= HandlePlayerReachedGoal;
         GoalFlag.ClearHandlers();
+
+        // Cleanup berry manager
+        _berryManager?.Cleanup();
+        _berryManager = null;
 
         if (_instance == this)
             _instance = null;
@@ -109,26 +139,41 @@ public class PlatformingPhase
         if (umcPlayer == null)
             return orig(self, direction, evenIfInvincible, registerDeathInStats);
 
-        // Call original but we'll override the death action
-        var deadBody = orig(self, direction, evenIfInvincible, registerDeathInStats);
+        // Players in dance mode are invincible
+        if (umcPlayer.InDanceMode)
+            return null;
 
-        // Only handle death if it actually happened
-        if (deadBody == null) return deadBody;
+        // Safety check - if platforming phase isn't active, let vanilla handle it
+        if (_instance == null)
+            return orig(self, direction, evenIfInvincible, registerDeathInStats);
 
-        // Clear the death action to prevent level reload
-        deadBody.DeathAction = null;
+        // Don't call orig - create our own custom dead body instead
+        var customDeadBody = new UmcPlayerDeadBody(self, direction, umcPlayer);
+        self.Scene?.Add(customDeadBody);
 
-        // Track this dead body so we can intercept its End call
-        _instance._managedDeadBodies.Add(deadBody);
+        // Remove the player from scene
+        self.RemoveSelf();
+
+        // Track the custom dead body
+        _instance._customDeadBodies.Add(customDeadBody);
 
         // Mark player as dead
         _instance._deadPlayers.Add(umcPlayer);
         UmcLogger.Info($"Player {umcPlayer.Name} died");
 
+        // Track the dead body with camera, untrack when animation completes
+        CameraController.Instance?.TrackEntity(customDeadBody);
+        customDeadBody.OnDeathComplete = () =>
+        {
+            CameraController.Instance?.UntrackEntity(customDeadBody);
+            _instance?.UntrackPlayer(umcPlayer);
+        };
+
+        // Berry dropping is handled by UmcBerry.OnLoseLeader
+
         // If online, broadcast the death
         if (NetworkManager.Instance?.IsOnline == true)
         {
-            // Local death - broadcast to others
             NetworkManager.Broadcast(new PlayerDeathSyncMessage
             {
                 PlayerIndex = umcPlayer.SlotIndex
@@ -138,21 +183,8 @@ public class PlatformingPhase
         // Check if all players are now dead
         _instance.CheckAllPlayersDead();
 
-        return deadBody;
-    }
-
-    private void OnPlayerDeadBodyEnd(On.Celeste.PlayerDeadBody.orig_End orig, PlayerDeadBody self)
-    {
-        // If this is one of our managed dead bodies, don't let it trigger a reload
-        if (_managedDeadBodies.Remove(self))
-        {
-            // Just remove the dead body without triggering any reload
-            self.RemoveSelf();
-            return;
-        }
-
-        // Let vanilla handle non-managed dead bodies
-        orig(self);
+        // Return null since we didn't create a vanilla PlayerDeadBody
+        return null;
     }
 
     public void RespawnPlayer(UmcPlayer umcPlayer)
@@ -188,6 +220,24 @@ public class PlatformingPhase
         {
             _allDeadTimer = 0f;
             UmcLogger.Info("All players done! Transitioning to scoring...");
+
+            // All players are done - re-track finished players so camera focuses on them
+            TrackFinishedPlayers();
+        }
+    }
+
+    private void TrackFinishedPlayers()
+    {
+        var spawner = PlayerSpawner.Instance;
+        var camera = CameraController.Instance;
+        if (spawner == null || camera == null) return;
+
+        foreach (var player in _finishedPlayers)
+        {
+            if (spawner.LocalPlayers.TryGetValue(player, out var localPlayer))
+                camera.TrackEntity(localPlayer);
+            if (spawner.RemotePlayers.TryGetValue(player, out var remotePlayer))
+                camera.TrackEntity(remotePlayer);
         }
     }
 
@@ -201,8 +251,13 @@ public class PlatformingPhase
         Audio.Play("event:/game/07_summit/checkpoint_confetti");
         UmcLogger.Info($"Player {player.Name} reached the goal! ({_finishedPlayers.Count} finished)");
 
-        // Despawn the player so they can't die after finishing
-        PlayerSpawner.Instance?.DespawnPlayer(player);
+        // Record in round state for scoring
+        RoundState.Current?.RecordPlayerFinished(player);
+
+        // Player is now in dance mode (set by GoalFlag) and invincible
+        // Remove from camera tracking so camera focuses on remaining active players
+        // (finished players get re-tracked when all players are done)
+        UntrackPlayer(player);
 
         // Broadcast to network
         if (NetworkManager.Instance?.IsOnline == true)
@@ -214,6 +269,18 @@ public class PlatformingPhase
         }
 
         CheckAllPlayersDead();
+    }
+
+    private void UntrackPlayer(UmcPlayer player)
+    {
+        var spawner = PlayerSpawner.Instance;
+        var camera = CameraController.Instance;
+        if (spawner == null || camera == null) return;
+
+        if (spawner.LocalPlayers.TryGetValue(player, out var localPlayer))
+            camera.UntrackEntity(localPlayer);
+        if (spawner.RemotePlayers.TryGetValue(player, out var remotePlayer))
+            camera.UntrackEntity(remotePlayer);
     }
 
     #region Network Handlers
@@ -251,6 +318,9 @@ public class PlatformingPhase
 
         _finishedPlayers.Add(player);
         UmcLogger.Info($"Synced finish for player {player.Name}");
+
+        // Record in round state for scoring
+        RoundState.Current?.RecordPlayerFinished(player);
 
         // Despawn the remote player
         PlayerSpawner.Instance?.DespawnPlayer(player);

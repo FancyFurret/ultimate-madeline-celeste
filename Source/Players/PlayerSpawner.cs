@@ -63,6 +63,9 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         if (IsMultiplayerLevel)
         {
             RemoveDefaultPlayer(self);
+
+            // Set camera default position around spawn
+            CameraController.Instance?.SetDefaultPosition(SpawnPosition);
         }
     }
 
@@ -158,6 +161,9 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         _localPlayers[umcPlayer] = player;
         UmcLogger.Info($"Spawned local player for {umcPlayer.Name} at {spawnPos}");
 
+        // Track with camera
+        CameraController.Instance?.TrackEntity(player);
+
         // Send player graphics to other clients so they have the animation map
         PlayerStateSync.Instance?.SendPlayerGraphics(umcPlayer, player);
 
@@ -191,6 +197,9 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         {
             remotePlayer.ApplySkin(config.Character_ID);
         }
+
+        // Track with camera
+        CameraController.Instance?.TrackEntity(remotePlayer);
 
         return remotePlayer;
     }
@@ -243,6 +252,37 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         }
 
         var controller = self.Get<LocalPlayerController>();
+        var umcPlayer = controller?.UmcPlayer ?? GetUmcPlayer(self);
+
+        // Hide player if flagged
+        if (umcPlayer?.IsHidden == true)
+        {
+            self.Visible = false;
+            self.Collidable = false;
+            return;
+        }
+
+        if (umcPlayer?.InDanceMode == true)
+        {
+            var savedX = self.Position.X;
+            var savedSpeedX = self.Speed.X;
+
+            if (controller != null)
+            {
+                controller.SwapInputsIn();
+                try { orig(self); }
+                finally { controller.SwapInputsOut(); }
+            }
+            else
+            {
+                orig(self);
+            }
+
+            self.Position.X = savedX;
+            self.Speed.X = 0;
+            return;
+        }
+
         if (controller != null)
         {
             controller.SwapInputsIn();

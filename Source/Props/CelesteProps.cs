@@ -1,4 +1,5 @@
 using System;
+using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -511,6 +512,7 @@ public class KevinProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override bool NeedsReset => true;
 
     public KevinProp(string id, string name, int width, int height)
     {
@@ -554,10 +556,44 @@ public class PufferProp : Prop
     public override string Name => "Puffer";
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
     public override MirrorMode AllowedMirror => MirrorMode.MirrorX;
+    public override bool NeedsReset => true;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
     {
         return new Puffer(position, mirrorX);
+    }
+
+    public override void OnPositionChanged(Entity entity, Vector2 newPosition)
+    {
+        // (entity as Puffer)?.anchorPosition = newPosition;
+        (entity as Puffer)?.startPosition = newPosition;
+        (entity as Puffer)?.Position = newPosition;
+    }
+}
+
+/// <summary>
+/// Berry prop - can be picked up by players and collected at the goal for bonus points.
+/// </summary>
+public class BerryProp : Prop
+{
+    private static readonly SpriteInfo _sprite = SpriteInfo.Custom(14, 14);
+
+    public override string Id => "berry";
+    public override string Name => "Berry";
+    public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
+
+    protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
+    {
+        var berry = new UmcBerry(position);
+        // Register with the berry manager if it exists
+        BerryManager.Instance?.RegisterBerry(berry);
+        return berry;
+    }
+
+    public override void OnPositionChanged(Entity entity, Vector2 newPosition)
+    {
+        if (entity is UmcBerry berry)
+            berry.SpawnPosition = newPosition;
     }
 }
 

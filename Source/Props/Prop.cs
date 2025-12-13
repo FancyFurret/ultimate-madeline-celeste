@@ -109,6 +109,12 @@ public abstract class Prop
     public virtual bool RequiresRebuildOnMove => false;
 
     /// <summary>
+    /// If true, this prop should be reset to its spawn position between rounds.
+    /// Override for props that can move during gameplay (e.g. Kevin, Puffer).
+    /// </summary>
+    public virtual bool NeedsReset => false;
+
+    /// <summary>
     /// The placement mode for this prop. Override to enable two-stage placement.
     /// </summary>
     public virtual PlacementMode PlacementMode => PlacementMode.SingleStage;

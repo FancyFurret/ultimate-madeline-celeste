@@ -13,6 +13,7 @@ using Celeste.Mod.UltimateMadelineCeleste.UI.Menu;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Overlays;
 using Celeste.Pico8;
 using Monocle;
+using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 
 namespace Celeste.Mod.UltimateMadelineCeleste;
 
@@ -83,7 +84,18 @@ public class UmcModule : EverestModule
         On.Monocle.Engine.Update -= EngineUpdateHook;
     }
 
-    public override void LoadContent(bool firstLoad) => base.LoadContent(firstLoad);
+    public override void LoadContent(bool firstLoad)
+    {
+        base.LoadContent(firstLoad);
+
+        if (firstLoad)
+        {
+            Scoreboard.LoadTextures();
+        }
+
+        UmcLogger.Info("Loading grayscale effect");
+        Utilities.GrayscaleEffect.Load();
+    }
 
     public void ApplySettings() { }
 
