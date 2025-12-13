@@ -80,6 +80,30 @@ public enum PlacementMode
 }
 
 /// <summary>
+/// Categories for props, used for party box slot rules.
+/// </summary>
+public enum PropCategory
+{
+    /// <summary>Things that kill players: spinners, spikes, lava/ice blocks, puffer, kevin.</summary>
+    Deadly,
+
+    /// <summary>Regular solid blocks for building.</summary>
+    Block,
+
+    /// <summary>Movement aids: springs, boosters, dash crystals, feather.</summary>
+    Movement,
+
+    /// <summary>Platforms: jump-through, crumble, falling, dream, cloud.</summary>
+    Platform,
+
+    /// <summary>Special/complex items: zip mover, swap block, car.</summary>
+    Special,
+
+    /// <summary>Collectibles: berries.</summary>
+    Collectible
+}
+
+/// <summary>
 /// Abstract base class for all props. Acts as a stateless template/factory.
 /// Use PropInstance to create instances with position/rotation state.
 /// </summary>
@@ -87,6 +111,11 @@ public abstract class Prop
 {
     public abstract string Name { get; }
     public abstract string Id { get; }
+
+    /// <summary>
+    /// The category this prop belongs to.
+    /// </summary>
+    public abstract PropCategory Category { get; }
 
     /// <summary>
     /// Gets the sprite info for the given rotation.

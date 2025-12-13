@@ -15,6 +15,7 @@ public class BlockProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Block;
 
     public override SpriteInfo GetSprite(float rotation = 0f)
     {

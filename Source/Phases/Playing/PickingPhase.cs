@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
-using Celeste.Mod.UltimateMadelineCeleste.Props;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
+using Celeste.Mod.UltimateMadelineCeleste.Props;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
@@ -26,7 +26,6 @@ public class PickingPhase
 
     private const float FirstRoundDelay = 2f;
     private const float SubsequentRoundDelay = 0.3f;
-    private const int PropCount = 5;
 
     public PickingState State { get; private set; } = PickingState.WaitingToStart;
     private float _stateTimer;
@@ -117,18 +116,13 @@ public class PickingPhase
     {
         _selectedProps.Clear();
 
-        var allProps = PropRegistry.All;
-        if (allProps.Count == 0)
-        {
-            UmcLogger.Warn("No props registered!");
-            return;
-        }
+        // Use RoundSettings for weighted prop selection
+        _selectedProps = RoundSettings.Current.SelectRandomProps(random: _random);
 
-        var available = allProps.ToList();
-        for (int i = 0; i < PropCount; i++)
+        if (_selectedProps.Count == 0)
         {
-            var index = _random.Next(available.Count);
-            _selectedProps.Add(available[index]);
+            UmcLogger.Warn("No props selected!");
+            return;
         }
 
         UmcLogger.Info($"Selected props: {string.Join(", ", _selectedProps.Select(p => p.Name))}");

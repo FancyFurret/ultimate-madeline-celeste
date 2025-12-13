@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Microsoft.Xna.Framework;
 using Monocle;
 
@@ -46,17 +47,8 @@ public static class ScoreTypeExtensions
         _ => Color.White
     };
 
-    /// <summary>Gets the base point value for this score type.</summary>
-    public static float GetBasePoints(this ScoreType type) => type switch
-    {
-        ScoreType.Finish => 5.0f,
-        ScoreType.FirstPlace => 0.2f,
-        ScoreType.TrapKill => 0.2f,
-        ScoreType.Berry => 0.6f,
-        ScoreType.UnderdogBonus => 0.6f,
-        ScoreType.Solo => 0.6f,
-        _ => 0f
-    };
+    /// <summary>Gets the base point value for this score type from RoundSettings.</summary>
+    public static float GetBasePoints(this ScoreType type) => RoundSettings.Current.GetScorePoints(type);
 }
 
 /// <summary>
@@ -79,19 +71,19 @@ public class ScoreSegment
 /// </summary>
 public static class ScoringConfig
 {
-    // ============== WIN CONDITIONS ==============
+    // ============== WIN CONDITIONS (from RoundSettings) ==============
 
     /// <summary>Points required to win the game.</summary>
-    public static float PointsToWin = 5.0f;
+    public static float PointsToWin => RoundSettings.Current.PointsToWin;
 
     /// <summary>Point difference required to be considered an underdog.</summary>
-    public static float UnderdogThreshold = 1.5f;
+    public static float UnderdogThreshold => RoundSettings.Current.UnderdogThreshold;
 
     /// <summary>Minimum players for solo bonus to apply.</summary>
-    public static int SoloMinPlayers = 3;
+    public static int SoloMinPlayers => RoundSettings.Current.SoloMinPlayers;
 
     /// <summary>Total number of rounds to play (0 = unlimited, play until points reached).</summary>
-    public static int MaxRounds = 0;
+    public static int MaxRounds => RoundSettings.Current.MaxRounds;
 
     // ============== UI COLORS ==============
 

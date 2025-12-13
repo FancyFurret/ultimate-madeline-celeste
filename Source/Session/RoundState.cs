@@ -235,10 +235,8 @@ public class RoundState
     /// </summary>
     public bool IsUnderdog(UmcPlayer player)
     {
-        return true;
         var stats = GetPlayerStats(player);
         float leaderScore = PlayerStats.Values.Max(s => s.TotalScore);
-
         return leaderScore - stats.TotalScore >= ScoringConfig.UnderdogThreshold;
     }
 

@@ -12,6 +12,7 @@ public class DustSpinnerProp : Prop
 
     public override string Id => "dust_spinner";
     public override string Name => "Dust Spinner";
+    public override PropCategory Category => PropCategory.Deadly;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -26,6 +27,7 @@ public class CrystalSpinnerProp : Prop
 
     public override string Id => "crystal_spinner";
     public override string Name => "Crystal Spinner";
+    public override PropCategory Category => PropCategory.Deadly;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -42,6 +44,7 @@ public class SpikesProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Deadly;
 
     public SpikesProp(string id, string name, int size)
     {
@@ -79,6 +82,7 @@ public class BumperProp : Prop
 
     public override string Id => "bumper";
     public override string Name => "Bumper";
+    public override PropCategory Category => PropCategory.Movement;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -103,6 +107,7 @@ public class SpringProp : Prop
 
     public override string Id => "spring";
     public override string Name => "Spring";
+    public override PropCategory Category => PropCategory.Movement;
 
     public override SpriteInfo GetSprite(float rotation = 0f) => rotation switch
     {
@@ -133,6 +138,7 @@ public class GreenBoosterProp : Prop
 
     public override string Id => "booster_green";
     public override string Name => "Green Booster";
+    public override PropCategory Category => PropCategory.Movement;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -147,6 +153,7 @@ public class RedBoosterProp : Prop
 
     public override string Id => "booster_red";
     public override string Name => "Red Booster";
+    public override PropCategory Category => PropCategory.Movement;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -161,6 +168,7 @@ public class DashCrystalProp : Prop
 
     public override string Id => "dash_crystal";
     public override string Name => "Dash Crystal";
+    public override PropCategory Category => PropCategory.Movement;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -175,6 +183,7 @@ public class DoubleDashCrystalProp : Prop
 
     public override string Id => "dash_crystal_double";
     public override string Name => "Double Dash Crystal";
+    public override PropCategory Category => PropCategory.Movement;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -189,6 +198,7 @@ public class FeatherProp : Prop
 
     public override string Id => "feather";
     public override string Name => "Feather";
+    public override PropCategory Category => PropCategory.Movement;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -206,6 +216,7 @@ public class BounceBlockProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Movement;
 
     public BounceBlockProp(string id, string name, int width, int height)
     {
@@ -237,6 +248,7 @@ public class JumpThroughProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Platform;
 
     public JumpThroughProp(string id, string name, int width)
     {
@@ -270,6 +282,7 @@ public class CrumbleBlockProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Platform;
 
     public CrumbleBlockProp(string id, string name, int width)
     {
@@ -296,6 +309,7 @@ public class FallingBlockProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Platform;
 
     public FallingBlockProp(string id, string name, int width, int height, char tileset = 'G')
     {
@@ -323,6 +337,7 @@ public class DreamBlockProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Platform;
 
     public DreamBlockProp(string id, string name, int width, int height)
     {
@@ -349,6 +364,7 @@ public class ZipMoverProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Special;
 
     public ZipMoverProp(string id, string name, int width, int height)
     {
@@ -385,6 +401,7 @@ public class SwapBlockProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Special;
 
     public SwapBlockProp(string id, string name, int width, int height)
     {
@@ -461,6 +478,7 @@ public class CloudProp : Prop
 
     public override string Id => "cloud";
     public override string Name => "Cloud";
+    public override PropCategory Category => PropCategory.Platform;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -476,6 +494,7 @@ public class IntroCarProp : Prop
 
     public override string Id => "intro_car";
     public override string Name => "Car";
+    public override PropCategory Category => PropCategory.Special;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
     public override MirrorMode AllowedMirror => MirrorMode.MirrorX;
     public override bool RequiresRebuildOnMove => true;
@@ -512,6 +531,7 @@ public class KevinProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
+    public override PropCategory Category => PropCategory.Movement;
     public override bool NeedsReset => true;
 
     public KevinProp(string id, string name, int width, int height)
@@ -554,6 +574,7 @@ public class PufferProp : Prop
 
     public override string Id => "puffer";
     public override string Name => "Puffer";
+    public override PropCategory Category => PropCategory.Movement;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
     public override MirrorMode AllowedMirror => MirrorMode.MirrorX;
     public override bool NeedsReset => true;
@@ -580,6 +601,7 @@ public class BerryProp : Prop
 
     public override string Id => "berry";
     public override string Name => "Berry";
+    public override PropCategory Category => PropCategory.Collectible;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
@@ -594,6 +616,186 @@ public class BerryProp : Prop
     {
         if (entity is UmcBerry berry)
             berry.SpawnPosition = newPosition;
+    }
+}
+
+/// <summary>
+/// A deadly lava block that kills players on touch.
+/// </summary>
+public class LavaBlockProp : Prop
+{
+    private readonly string _id;
+    private readonly string _name;
+    private readonly int _width;
+    private readonly int _height;
+
+    public override string Id => _id;
+    public override string Name => _name;
+    public override PropCategory Category => PropCategory.Deadly;
+
+    public LavaBlockProp(string id, string name, int width, int height)
+    {
+        _id = id;
+        _name = name;
+        _width = width;
+        _height = height;
+    }
+
+    public override SpriteInfo GetSprite(float rotation = 0f)
+    {
+        bool swapped = rotation == 90f || rotation == 270f;
+        float w = swapped ? _height : _width;
+        float h = swapped ? _width : _height;
+        return SpriteInfo.Custom(w, h, Vector2.Zero);
+    }
+
+    public override RotationMode AllowedRotation => RotationMode.Rotate90;
+
+    protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
+    {
+        var sprite = GetSprite(rotation);
+        return new PlacedLavaBlock(position, (int)sprite.Width, (int)sprite.Height);
+    }
+}
+
+/// <summary>
+/// A placed lava block entity that kills on contact.
+/// </summary>
+public class PlacedLavaBlock : Entity
+{
+    private readonly int _width;
+    private readonly int _height;
+    private LavaRect _lava;
+
+    public PlacedLavaBlock(Vector2 position, int width, int height) : base(position)
+    {
+        _width = width;
+        _height = height;
+        Collider = new Hitbox(width, height);
+        Depth = -8500;
+
+        Add(new PlayerCollider(OnPlayer));
+        Add(_lava = new LavaRect(width, height, 2));
+
+        // Lava visual settings
+        _lava.SurfaceColor = Calc.HexToColor("ff8933");
+        _lava.EdgeColor = Calc.HexToColor("f25e29");
+        _lava.CenterColor = Calc.HexToColor("d01c01");
+        _lava.SmallWaveAmplitude = 2f;
+        _lava.BigWaveAmplitude = 2f;
+        _lava.CurveAmplitude = 2f;
+    }
+
+    private void OnPlayer(Player player)
+    {
+        player.Die((player.Center - Center).SafeNormalize());
+    }
+}
+
+/// <summary>
+/// An ice/cold block that kills players on touch.
+/// </summary>
+public class IceBlockProp : Prop
+{
+    private readonly string _id;
+    private readonly string _name;
+    private readonly int _width;
+    private readonly int _height;
+
+    public override string Id => _id;
+    public override string Name => _name;
+    public override PropCategory Category => PropCategory.Deadly;
+
+    public IceBlockProp(string id, string name, int width, int height)
+    {
+        _id = id;
+        _name = name;
+        _width = width;
+        _height = height;
+    }
+
+    public override SpriteInfo GetSprite(float rotation = 0f)
+    {
+        bool swapped = rotation == 90f || rotation == 270f;
+        float w = swapped ? _height : _width;
+        float h = swapped ? _width : _height;
+        return SpriteInfo.Custom(w, h, Vector2.Zero);
+    }
+
+    public override RotationMode AllowedRotation => RotationMode.Rotate90;
+
+    protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
+    {
+        var sprite = GetSprite(rotation);
+        return new PlacedIceBlock(position, (int)sprite.Width, (int)sprite.Height);
+    }
+}
+
+/// <summary>
+/// A placed ice block entity that kills on contact.
+/// </summary>
+public class PlacedIceBlock : Entity
+{
+    private readonly int _width;
+    private readonly int _height;
+    private LavaRect _lava;
+
+    public PlacedIceBlock(Vector2 position, int width, int height) : base(position)
+    {
+        _width = width;
+        _height = height;
+        Collider = new Hitbox(width, height);
+        Depth = -8500;
+
+        Add(new PlayerCollider(OnPlayer));
+        Add(_lava = new LavaRect(width, height, 2));
+
+        // Ice visual settings
+        _lava.SurfaceColor = Calc.HexToColor("a6fff4");
+        _lava.EdgeColor = Calc.HexToColor("6cd6eb");
+        _lava.CenterColor = Calc.HexToColor("4ca8d6");
+        _lava.SmallWaveAmplitude = 1f;
+        _lava.BigWaveAmplitude = 1f;
+        _lava.CurveAmplitude = 1f;
+        _lava.UpdateMultiplier = 0.3f;
+    }
+
+    private void OnPlayer(Player player)
+    {
+        player.Die((player.Center - Center).SafeNormalize());
+    }
+}
+
+/// <summary>
+/// A fire bar/rotating hazard prop.
+/// </summary>
+public class FireBarProp : Prop
+{
+    private static readonly SpriteInfo _sprite = SpriteInfo.Custom(24, 24);
+
+    public override string Id => "fire_bar";
+    public override string Name => "Fire Spinner";
+    public override PropCategory Category => PropCategory.Deadly;
+    public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
+
+    protected override Entity BuildEntity(Vector2 position, float rotation, bool mirrorX, bool mirrorY)
+    {
+        // RotateSpinner needs Nodes[0] as center and Position as the spinner location
+        // The spinner rotates around the center point
+        var center = position; // Center of rotation
+        var spinnerPos = position + new Vector2(12, 0); // Offset spinner from center
+
+        var data = new EntityData
+        {
+            Position = spinnerPos,
+            Nodes = new[] { center },
+            Values = new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "clockwise", !mirrorX }
+            }
+        };
+
+        return new RotateSpinner(data, Vector2.Zero);
     }
 }
 

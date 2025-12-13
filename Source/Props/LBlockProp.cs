@@ -14,6 +14,7 @@ public class LBlockProp : Prop
 
     public override string Id => "block_l";
     public override string Name => "L Block";
+    public override PropCategory Category => PropCategory.Block;
     public override SpriteInfo GetSprite(float rotation = 0f) => _sprite;
 
     public override RotationMode AllowedRotation => RotationMode.Rotate90;
