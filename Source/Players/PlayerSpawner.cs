@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Celeste.Mod.SkinModHelper;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
+using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
@@ -105,22 +106,31 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
                 continue;
             }
 
+            // Only spawn local players - remote players spawn via NetworkedEntity factory
+            // when the remote client spawns their local player
             if (umcPlayer.IsLocal)
+            {
                 SpawnLocalPlayer(level, umcPlayer, spawnPos);
-            else
-                SpawnRemotePlayer(level, umcPlayer, spawnPos);
+            }
         }
     }
 
     public void DespawnAllSessionPlayers()
     {
-        var session = GameSession.Instance;
-        if (session == null) return;
-
-        foreach (var umcPlayer in session.Players.All.ToList())
+        // Despawn all local players - their NetworkedPlayerComponent will broadcast despawn
+        // Remote players auto-despawn when they receive the DespawnEntityMessage
+        foreach (var kvp in _localPlayers.ToList())
         {
-            DespawnPlayer(umcPlayer);
+            kvp.Value?.RemoveSelf();
         }
+        _localPlayers.Clear();
+
+        // Also clear any remaining remote player references (they should auto-remove)
+        foreach (var kvp in _remotePlayers.ToList())
+        {
+            kvp.Value?.RemoveSelf();
+        }
+        _remotePlayers.Clear();
     }
 
     public void RespawnAllSessionPlayers(Level level, Vector2? spawnPosition = null)
@@ -134,10 +144,12 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         DespawnPlayer(umcPlayer);
 
         var spawnPos = spawnPosition ?? SpawnPosition;
+
+        // Only respawn local players - remote players spawn via NetworkedEntity factory
         if (umcPlayer.IsLocal)
+        {
             SpawnLocalPlayer(level, umcPlayer, spawnPos);
-        else
-            SpawnRemotePlayer(level, umcPlayer, spawnPos);
+        }
     }
 
     public Player SpawnLocalPlayer(Level level, UmcPlayer umcPlayer, Vector2? spawnPosition = null)
@@ -156,6 +168,11 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         var player = new Player(spawnPos, spriteMode);
         var controller = new LocalPlayerController(umcPlayer);
         player.Add(controller);
+
+        // Add networked player component for automatic spawn/despawn and frame sync
+        var netPlayer = new NetworkedPlayerComponent(umcPlayer, spawnPos);
+        player.Add(netPlayer);
+
         player.Tag |= Tags.Persistent;
 
         level.Add(player);
@@ -165,8 +182,8 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         // Track with camera
         CameraController.Instance?.TrackEntity(player);
 
-        // Send player graphics to other clients so they have the animation map
-        PlayerStateSync.Instance?.SendPlayerGraphics(umcPlayer, player);
+        // Send player graphics after entity is added to scene (so the net component is ready)
+        level.OnEndOfFrame += () => netPlayer.SendGraphics();
 
         // Attach life hearts if lives system is enabled
         int lives = RoundState.Current?.GetPlayerStats(umcPlayer)?.LivesRemaining ?? umcPlayer.MaxLives;
@@ -178,6 +195,10 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         return player;
     }
 
+    /// <summary>
+    /// Manually spawns a remote player (for cases where NetworkedEntity isn't used).
+    /// Prefer using the NetworkedEntity system which auto-spawns via factory.
+    /// </summary>
     public RemotePlayer SpawnRemotePlayer(Level level, UmcPlayer umcPlayer, Vector2? spawnPosition = null)
     {
         if (_remotePlayers.TryGetValue(umcPlayer, out var player))
@@ -210,6 +231,36 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
         CameraController.Instance?.TrackEntity(remotePlayer);
 
         return remotePlayer;
+    }
+
+    /// <summary>
+    /// Registers a remote player that was created by the NetworkedEntity factory.
+    /// </summary>
+    public void RegisterRemotePlayer(UmcPlayer umcPlayer, RemotePlayer remotePlayer)
+    {
+        if (_remotePlayers.TryGetValue(umcPlayer, out var existing))
+        {
+            // Remove old entity if it still exists
+            if (existing.Scene != null)
+            {
+                existing.RemoveSelf();
+            }
+            UmcLogger.Info($"Replacing existing remote player for {umcPlayer.Name}");
+        }
+
+        _remotePlayers[umcPlayer] = remotePlayer;
+        UmcLogger.Info($"Registered remote player for {umcPlayer.Name}");
+    }
+
+    /// <summary>
+    /// Unregisters a remote player (called when the entity is removed).
+    /// </summary>
+    public void UnregisterRemotePlayer(UmcPlayer umcPlayer)
+    {
+        if (_remotePlayers.Remove(umcPlayer))
+        {
+            UmcLogger.Info($"Unregistered remote player for {umcPlayer.Name}");
+        }
     }
 
     public void DespawnPlayer(UmcPlayer umcPlayer)

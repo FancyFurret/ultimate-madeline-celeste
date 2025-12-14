@@ -178,17 +178,7 @@ public class RoundState
     {
         var players = GameSession.Instance?.Players.All;
         if (players == null || players.Count == 0) return false;
-
-        foreach (var player in players)
-        {
-            var stats = GetPlayerStats(player);
-            // If someone didn't finish and didn't die, return false
-            if (!stats.FinishedThisRound && !stats.DiedThisRound)
-                return false;
-        }
-
-        // Check if at least one person finished
-        return PlayerStats.Values.Any(s => s.FinishedThisRound);
+        return PlayerStats.Values.All(s => s.FinishedThisRound);
     }
 
     /// <summary>
@@ -345,6 +335,9 @@ public class PlayerRoundStats
 
     // All score segments earned (persists across rounds for display)
     public List<ScoreSegment> ScoreSegments { get; } = new();
+
+    // Index where this round's new segments start (for animation)
+    public int RoundStartSegmentIndex { get; set; }
 
     // Per-round stats (reset each round)
     public bool FinishedThisRound { get; set; }

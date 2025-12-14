@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
+using Celeste.Mod.UltimateMadelineCeleste.Scoring;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
@@ -22,6 +24,12 @@ public class PlatformingPhase
     private float _allDeadTimer;
     private static PlatformingPhase _instance;
     private BerryManager _berryManager;
+
+    /// <summary>
+    /// Scores received from host (or calculated if we are host).
+    /// Passed to ScoringPhase.
+    /// </summary>
+    public PlatformingCompleteMessage ReceivedScores { get; private set; }
 
     public event Action OnComplete;
 
@@ -93,8 +101,117 @@ public class PlatformingPhase
 
     private void Complete()
     {
-        // Host broadcasts completion to all
-        NetworkManager.BroadcastWithSelf(new PlatformingCompleteMessage());
+        // Host calculates scores and broadcasts to all
+        var message = new PlatformingCompleteMessage
+        {
+            RoundNumber = RoundState.Current?.RoundNumber ?? 1,
+            PlayerScores = CalculateScores()
+        };
+
+        NetworkManager.BroadcastWithSelf(message);
+    }
+
+    /// <summary>
+    /// Host calculates all player scores for this round.
+    /// </summary>
+    private List<PlayerScoreData> CalculateScores()
+    {
+        var scores = new List<PlayerScoreData>();
+
+        var session = GameSession.Instance;
+        var round = RoundState.Current;
+        if (session == null || round == null) return scores;
+
+        bool isTooEasy = round.DidEveryoneFinish() && session.Players.All.Count > 1;
+        bool isNoWinners = round.DidNoOneFinish();
+
+        int totalPlayers = session.Players.All.Count;
+        int finisherCount = round.GetFinisherCount();
+        bool isSoloWin = finisherCount == 1 && totalPlayers >= ScoringConfig.SoloMinPlayers;
+
+        foreach (var player in session.Players.All)
+        {
+            var stats = round.GetPlayerStats(player);
+
+            // Track where new segments start (before adding this round's)
+            int roundStartIndex = stats.ScoreSegments.Count;
+
+            bool isUnderdog = round.IsUnderdog(player);
+            stats.WasUnderdogThisRound = isUnderdog;
+
+            // Calculate points if not a special condition round
+            if (!isTooEasy && !isNoWinners)
+            {
+                // Finish points
+                if (stats.FinishedThisRound)
+                {
+                    float points = ScoreType.Finish.GetBasePoints();
+                    stats.TotalScore += points;
+                    stats.AddScoreSegment(ScoreType.Finish, points);
+                }
+
+                // First place points (only with 3+ players)
+                if (stats.FinishOrder == 0 && totalPlayers >= 3)
+                {
+                    float points = ScoreType.FirstPlace.GetBasePoints();
+                    stats.TotalScore += points;
+                    stats.AddScoreSegment(ScoreType.FirstPlace, points);
+                }
+
+                // Trap kill points
+                if (stats.TrapKillsThisRound > 0)
+                {
+                    float points = stats.TrapKillsThisRound * ScoreType.TrapKill.GetBasePoints();
+                    stats.TotalScore += points;
+                    stats.AddScoreSegment(ScoreType.TrapKill, points);
+                }
+
+                // Berry points
+                if (stats.BerriesThisRound > 0)
+                {
+                    float points = stats.BerriesThisRound * ScoreType.Berry.GetBasePoints();
+                    stats.TotalScore += points;
+                    stats.AddScoreSegment(ScoreType.Berry, points);
+                }
+
+                // Underdog bonus
+                if (stats.FinishedThisRound && isUnderdog)
+                {
+                    float points = ScoreType.UnderdogBonus.GetBasePoints();
+                    stats.TotalScore += points;
+                    stats.AddScoreSegment(ScoreType.UnderdogBonus, points);
+                }
+
+                // Solo bonus
+                if (stats.FinishedThisRound && isSoloWin)
+                {
+                    float points = ScoreType.Solo.GetBasePoints();
+                    stats.TotalScore += points;
+                    stats.AddScoreSegment(ScoreType.Solo, points);
+                }
+            }
+
+            // Build score data with ALL segments (cumulative)
+            var scoreData = new PlayerScoreData
+            {
+                SlotIndex = player.SlotIndex,
+                TotalScore = stats.TotalScore,
+                TotalDeaths = stats.TotalDeaths,
+                TotalBerries = stats.TotalBerries,
+                TotalTrapKills = stats.TotalTrapKills,
+                RoundStartSegmentIndex = roundStartIndex,
+                WasUnderdogThisRound = isUnderdog,
+                Segments = stats.ScoreSegments.Select(s => new ScoreSegmentData
+                {
+                    Type = (byte)s.Type,
+                    Points = s.Points
+                }).ToList()
+            };
+
+            scores.Add(scoreData);
+        }
+
+        return scores;
     }
 
     private void DoComplete()
@@ -147,18 +264,11 @@ public class PlatformingPhase
         if (_instance == null)
             return orig(self, direction, evenIfInvincible, registerDeathInStats);
 
-        // Record death in stats and consume a life
+        // Calculate new lives and apply death
         var stats = RoundState.Current?.GetPlayerStats(umcPlayer);
-        if (stats != null)
-        {
-            stats.TotalDeaths++;
-            stats.DiedThisRound = true;
-            stats.LivesRemaining--;
-        }
-
-        // Break a heart
-        LifeHeartManager.RemoveOneLife(umcPlayer);
-        bool shouldRespawn = stats?.LivesRemaining > 0;
+        int livesRemaining = (stats?.LivesRemaining ?? 1) - 1;
+        bool isEliminated = _instance.ApplyPlayerDeath(umcPlayer, livesRemaining, null);
+        bool shouldRespawn = !isEliminated;
 
         // Don't call orig - create our own custom dead body instead
         var customDeadBody = new UmcPlayerDeadBody(self, direction, umcPlayer);
@@ -176,7 +286,7 @@ public class PlatformingPhase
         if (shouldRespawn)
         {
             // Player has lives remaining - respawn after death animation
-            UmcLogger.Info($"Player {umcPlayer.Name} died, {stats?.LivesRemaining ?? 0} lives remaining");
+            UmcLogger.Info($"Player {umcPlayer.Name} died, {livesRemaining} lives remaining");
             customDeadBody.OnDeathComplete = () =>
             {
                 CameraController.Instance?.UntrackEntity(customDeadBody);
@@ -190,7 +300,6 @@ public class PlatformingPhase
         else
         {
             // Player is eliminated (no lives remaining)
-            _instance._deadPlayers.Add(umcPlayer);
             UmcLogger.Info($"Player {umcPlayer.Name} eliminated (no lives remaining)");
 
             customDeadBody.OnDeathComplete = () =>
@@ -198,22 +307,17 @@ public class PlatformingPhase
                 CameraController.Instance?.UntrackEntity(customDeadBody);
                 _instance?.UntrackPlayer(umcPlayer);
             };
-
-            // Check if all players are now dead
-            _instance.CheckAllPlayersDead();
         }
 
         // Berry dropping is handled by UmcBerry.OnLoseLeader
 
-        // If online, broadcast the death
-        if (NetworkManager.Instance?.IsOnline == true)
+        // Broadcast the death with explicit lives remaining
+        NetworkManager.Broadcast(new PlayerDeathSyncMessage
         {
-            NetworkManager.Broadcast(new PlayerDeathSyncMessage
-            {
-                PlayerIndex = umcPlayer.SlotIndex,
-                IsEliminated = !shouldRespawn
-            });
-        }
+            PlayerIndex = umcPlayer.SlotIndex,
+            LivesRemaining = livesRemaining,
+            KillerSlotIndex = -1 // TODO: Track killer from trap
+        });
 
         // Return null since we didn't create a vanilla PlayerDeadBody
         return null;
@@ -226,6 +330,40 @@ public class PlatformingPhase
         if (level == null || spawner == null) return;
 
         spawner.RespawnPlayer(level, umcPlayer);
+    }
+
+    /// <summary>
+    /// Applies death stats and effects for a player (shared between local and remote deaths).
+    /// Returns true if the player was eliminated (no lives remaining).
+    /// </summary>
+    private bool ApplyPlayerDeath(UmcPlayer player, int livesRemaining, int? killerSlotIndex)
+    {
+        var stats = RoundState.Current?.GetPlayerStats(player);
+        if (stats != null)
+        {
+            stats.TotalDeaths++;
+            stats.LivesRemaining = livesRemaining;
+            if (livesRemaining <= 0)
+                stats.DiedThisRound = true;
+        }
+
+        // Record trap kill if killed by another player
+        if (killerSlotIndex.HasValue && killerSlotIndex.Value >= 0 && killerSlotIndex.Value != player.SlotIndex)
+        {
+            RoundState.Current?.RecordTrapKill(killerSlotIndex.Value);
+        }
+
+        // Break a heart
+        LifeHeartManager.RemoveOneLife(player);
+
+        bool isEliminated = livesRemaining <= 0;
+        if (isEliminated && !_deadPlayers.Contains(player))
+        {
+            _deadPlayers.Add(player);
+            CheckAllPlayersDead();
+        }
+
+        return isEliminated;
     }
 
     /// <summary>
@@ -293,13 +431,10 @@ public class PlatformingPhase
         UntrackPlayer(player);
 
         // Broadcast to network
-        if (NetworkManager.Instance?.IsOnline == true)
+        NetworkManager.Broadcast(new PlayerFinishedSyncMessage
         {
-            NetworkManager.Broadcast(new PlayerFinishedSyncMessage
-            {
-                PlayerIndex = player.SlotIndex
-            });
-        }
+            PlayerIndex = player.SlotIndex
+        });
 
         CheckAllPlayersDead();
     }
@@ -326,40 +461,68 @@ public class PlatformingPhase
         var player = session.Players.GetAtSlot(message.PlayerIndex);
         if (player == null) return;
 
-        if (message.IsEliminated)
+        // Don't double-count if already dead
+        if (_deadPlayers.Contains(player)) return;
+
+        var spawner = PlayerSpawner.Instance;
+        var level = Engine.Scene as Level;
+        var remotePlayer = spawner?.GetRemotePlayer(player);
+
+        // Apply death stats, break heart, and handle elimination
+        int? killerSlot = message.KillerSlotIndex >= 0 ? message.KillerSlotIndex : null;
+        bool isEliminated = ApplyPlayerDeath(player, message.LivesRemaining, killerSlot);
+
+        // Create death animation if we have the remote player entity
+        if (remotePlayer != null && level != null)
         {
-            // Don't double-count if already dead
-            if (_deadPlayers.Contains(player)) return;
+            // Random death direction (we don't have the actual direction from the killer)
+            var direction = new Vector2(Calc.Random.Choose(-1, 1), -1f);
+            direction.Normalize();
 
-            _deadPlayers.Add(player);
-            UmcLogger.Info($"Synced elimination for player {player.Name}");
+            var deadBody = new UmcPlayerDeadBody(remotePlayer, direction, player);
+            level.Add(deadBody);
+            _customDeadBodies.Add(deadBody);
 
-            // Despawn the remote player so they're no longer visible or tracked by camera
-            PlayerSpawner.Instance?.DespawnPlayer(player);
+            // Track dead body with camera
+            CameraController.Instance?.TrackEntity(deadBody);
 
-            // Update state - record death and mark as eliminated
-            var stats = RoundState.Current?.GetPlayerStats(player);
-            if (stats != null)
+            // Remove the remote player entity from scene (dead body takes over visuals)
+            remotePlayer.RemoveSelf();
+
+            if (isEliminated)
             {
-                stats.TotalDeaths++;
-                stats.DiedThisRound = true;
-                stats.LivesRemaining = 0;
+                UmcLogger.Info($"Synced elimination for player {player.Name}");
+                deadBody.OnDeathComplete = () =>
+                {
+                    CameraController.Instance?.UntrackEntity(deadBody);
+                    UntrackPlayer(player);
+                };
             }
+            else
+            {
+                UmcLogger.Info($"Synced death for player {player.Name} ({message.LivesRemaining} lives remaining)");
+                deadBody.OnDeathComplete = () =>
+                {
+                    CameraController.Instance?.UntrackEntity(deadBody);
+                    deadBody.Cleanup();
+                    _customDeadBodies.Remove(deadBody);
 
-            CheckAllPlayersDead();
+                    // Respawn the remote player
+                    spawner?.RespawnPlayer(level, player);
+                };
+            }
         }
         else
         {
-            // Player died but will respawn - just log it
-            UmcLogger.Info($"Synced death for player {player.Name} (will respawn)");
-
-            // Record death and consume a life
-            var stats = RoundState.Current?.GetPlayerStats(player);
-            if (stats != null)
+            // Fallback if no remote player entity found
+            if (isEliminated)
             {
-                stats.TotalDeaths++;
-                stats.DiedThisRound = true;
-                stats.LivesRemaining--;
+                UmcLogger.Info($"Synced elimination for player {player.Name} (no entity)");
+                spawner?.DespawnPlayer(player);
+            }
+            else
+            {
+                UmcLogger.Info($"Synced death for player {player.Name} ({message.LivesRemaining} lives remaining, no entity)");
             }
         }
     }
@@ -381,15 +544,54 @@ public class PlatformingPhase
         // Record in round state for scoring
         RoundState.Current?.RecordPlayerFinished(player);
 
-        // Despawn the remote player
-        PlayerSpawner.Instance?.DespawnPlayer(player);
+        // Untrack from camera so it focuses on remaining active players
+        // (but keep the remote player entity visible for dance animation)
+        UntrackPlayer(player);
 
         CheckAllPlayersDead();
     }
 
     private void HandlePlatformingComplete(PlatformingCompleteMessage message)
     {
+        // Apply scores from host to our local state
+        ApplyReceivedScores(message);
+        ReceivedScores = message;
         DoComplete();
+    }
+
+    /// <summary>
+    /// Applies scores received from host to local RoundState.
+    /// </summary>
+    private void ApplyReceivedScores(PlatformingCompleteMessage message)
+    {
+        var round = RoundState.Current;
+        if (round == null) return;
+
+        foreach (var scoreData in message.PlayerScores)
+        {
+            var session = GameSession.Instance;
+            var player = session?.Players.GetAtSlot(scoreData.SlotIndex);
+            if (player == null) continue;
+
+            var stats = round.GetPlayerStats(player);
+
+            // Apply the authoritative values from host
+            stats.TotalScore = scoreData.TotalScore;
+            stats.TotalDeaths = scoreData.TotalDeaths;
+            stats.TotalBerries = scoreData.TotalBerries;
+            stats.TotalTrapKills = scoreData.TotalTrapKills;
+            stats.RoundStartSegmentIndex = scoreData.RoundStartSegmentIndex;
+            stats.WasUnderdogThisRound = scoreData.WasUnderdogThisRound;
+
+            // Replace all segments with authoritative list from host
+            stats.ScoreSegments.Clear();
+            foreach (var segData in scoreData.Segments)
+            {
+                stats.ScoreSegments.Add(new ScoreSegment((ScoreType)segData.Type, segData.Points));
+            }
+        }
+
+        UmcLogger.Info($"Applied scores from host for round {message.RoundNumber}");
     }
 
     #endregion
@@ -400,18 +602,21 @@ public class PlatformingPhase
 public class PlayerDeathSyncMessage : INetMessage
 {
     public int PlayerIndex { get; set; }
-    public bool IsEliminated { get; set; }
+    public int LivesRemaining { get; set; }
+    public int KillerSlotIndex { get; set; } = -1; // -1 = no killer (self/environment)
 
     public void Serialize(BinaryWriter writer)
     {
         writer.Write((byte)PlayerIndex);
-        writer.Write(IsEliminated);
+        writer.Write((sbyte)LivesRemaining);
+        writer.Write((sbyte)KillerSlotIndex);
     }
 
     public void Deserialize(BinaryReader reader)
     {
         PlayerIndex = reader.ReadByte();
-        IsEliminated = reader.ReadBoolean();
+        LivesRemaining = reader.ReadSByte();
+        KillerSlotIndex = reader.ReadSByte();
     }
 }
 
@@ -432,8 +637,96 @@ public class PlayerFinishedSyncMessage : INetMessage
 
 public class PlatformingCompleteMessage : INetMessage
 {
-    public void Serialize(BinaryWriter writer) { }
-    public void Deserialize(BinaryReader reader) { }
+    public int RoundNumber { get; set; }
+    public List<PlayerScoreData> PlayerScores { get; set; } = new();
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)RoundNumber);
+        writer.Write((byte)PlayerScores.Count);
+        foreach (var score in PlayerScores)
+        {
+            score.Serialize(writer);
+        }
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        RoundNumber = reader.ReadByte();
+        int count = reader.ReadByte();
+        PlayerScores = new List<PlayerScoreData>(count);
+        for (int i = 0; i < count; i++)
+        {
+            var score = new PlayerScoreData();
+            score.Deserialize(reader);
+            PlayerScores.Add(score);
+        }
+    }
+}
+
+public class PlayerScoreData : INetMessage
+{
+    public int SlotIndex { get; set; }
+    public float TotalScore { get; set; }
+    public int TotalDeaths { get; set; }
+    public int TotalBerries { get; set; }
+    public int TotalTrapKills { get; set; }
+    public int RoundStartSegmentIndex { get; set; } // Index where this round's new segments start
+    public bool WasUnderdogThisRound { get; set; }
+    public List<ScoreSegmentData> Segments { get; set; } = new();
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)SlotIndex);
+        writer.Write(TotalScore);
+        writer.Write((byte)TotalDeaths);
+        writer.Write((byte)TotalBerries);
+        writer.Write((byte)TotalTrapKills);
+        writer.Write((byte)RoundStartSegmentIndex);
+        writer.Write(WasUnderdogThisRound);
+        writer.Write((byte)Segments.Count);
+        foreach (var seg in Segments)
+        {
+            seg.Serialize(writer);
+        }
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        SlotIndex = reader.ReadByte();
+        TotalScore = reader.ReadSingle();
+        TotalDeaths = reader.ReadByte();
+        TotalBerries = reader.ReadByte();
+        TotalTrapKills = reader.ReadByte();
+        RoundStartSegmentIndex = reader.ReadByte();
+        WasUnderdogThisRound = reader.ReadBoolean();
+        int segCount = reader.ReadByte();
+        Segments = new List<ScoreSegmentData>(segCount);
+        for (int i = 0; i < segCount; i++)
+        {
+            var seg = new ScoreSegmentData();
+            seg.Deserialize(reader);
+            Segments.Add(seg);
+        }
+    }
+}
+
+public class ScoreSegmentData : INetMessage
+{
+    public byte Type { get; set; }
+    public float Points { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write(Type);
+        writer.Write(Points);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        Type = reader.ReadByte();
+        Points = reader.ReadSingle();
+    }
 }
 
 #endregion

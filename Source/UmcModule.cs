@@ -56,6 +56,7 @@ public class UmcModule : EverestModule
         InputHandler.Enable();
         PauseMenuExtensions.Load();
         OnlinePlayersOverlay.Load();
+        NetworkEntitiesDebugOverlay.Load();
 
         PlayerSpawner.Load();
         CameraController.Load();
@@ -75,6 +76,7 @@ public class UmcModule : EverestModule
         PauseMenuExtensions.Unload();
         PhaseManager.Unload();
         OnlinePlayersOverlay.Unload();
+        NetworkEntitiesDebugOverlay.Unload();
 
         PlayerSpawner.Unload();
         CameraController.Unload();
@@ -148,8 +150,17 @@ public class UmcModule : EverestModule
         messages.Register<PlayerFinishedSyncMessage>();
         messages.Register<PlatformingCompleteMessage>();
 
+        // Lives/Scoring messages
+        messages.Register<PlayerLivesChangedMessage>();
+
+        // Berry messages
+        messages.Register<BerryPickedMessage>();
+        messages.Register<BerryCollectedMessage>();
+        messages.Register<BerryDroppedMessage>();
+
         // Register entity factories
         PlayerCursor.RegisterFactory();
+        NetworkedPlayerComponent.RegisterFactory();
     }
 
     private static void SceneBeginHook(On.Monocle.Scene.orig_Begin orig, Scene self)
@@ -162,6 +173,5 @@ public class UmcModule : EverestModule
     {
         orig(self, gameTime);
         NetworkManager.Update();
-        PlayerStateSync.Instance?.Update();
     }
 }

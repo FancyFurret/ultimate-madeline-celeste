@@ -29,7 +29,6 @@ public class NetworkManager
     private SteamLobby _steamLobby;
     private SteamTransport _steamTransport;
     private LobbyController _lobbyController;
-    private PlayerStateSync _playerStateSync;
     private NetworkedEntityRegistry _entityRegistry = new();
 
     public event Action OnConnected;
@@ -46,7 +45,6 @@ public class NetworkManager
         SteamManager.Initialize();
 
         _lobbyController = new LobbyController();
-        _playerStateSync = new PlayerStateSync();
 
         _lobbyController.OnConnected += () => OnConnected?.Invoke();
         _lobbyController.OnDisconnected += () => OnDisconnected?.Invoke();
@@ -91,7 +89,6 @@ public class NetworkManager
         _lobbyController?.Shutdown(_steamLobby);
         _steamLobby?.Shutdown();
         _steamTransport?.Shutdown();
-        _playerStateSync?.Clear();
         SteamManager.Shutdown();
         Messages.Clear();
     }

@@ -11,7 +11,7 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Entities;
 public class LifeHeart : Entity
 {
     public UmcPlayer Owner { get; }
-    public Player TrackedPlayer { get; private set; }
+    public Entity TrackedEntity { get; private set; }
     public int LifeIndex { get; }
     public int TotalLives { get; } // Total hearts in this group for centering
 
@@ -27,10 +27,10 @@ public class LifeHeart : Entity
     private const float VisibleDuration = 2.5f; // How long to stay fully visible
     private const float FadeDuration = 0.5f; // How long to fade out
 
-    public LifeHeart(UmcPlayer owner, Player player, int lifeIndex, int totalLives) : base(player.Position)
+    public LifeHeart(UmcPlayer owner, Entity trackedEntity, int lifeIndex, int totalLives) : base(trackedEntity.Position)
     {
         Owner = owner;
-        TrackedPlayer = player;
+        TrackedEntity = trackedEntity;
         LifeIndex = lifeIndex;
         TotalLives = totalLives;
         Depth = Depths.Top - 10;
@@ -53,7 +53,7 @@ public class LifeHeart : Entity
         if (_breaking) return;
 
         // If player is gone, remove self
-        if (TrackedPlayer == null || TrackedPlayer.Scene == null)
+        if (TrackedEntity == null || TrackedEntity.Scene == null)
         {
             RemoveSelf();
             return;
@@ -86,7 +86,7 @@ public class LifeHeart : Entity
         float yFloat = (float)Math.Sin(_wobble) * 2f;
 
         // Position relative to player center (not feet)
-        Position = TrackedPlayer.Center + new Vector2(xOffset, HeadOffset + yFloat);
+        Position = TrackedEntity.Center + new Vector2(xOffset, HeadOffset + yFloat);
     }
 
     /// <summary>
@@ -142,7 +142,7 @@ public static class LifeHeartManager
     /// <summary>
     /// Attaches life hearts to a player based on the specified lives count.
     /// </summary>
-    public static void AttachToPlayer(Player player, UmcPlayer umcPlayer, int lives)
+    public static void AttachToPlayer(Entity playerEntity, UmcPlayer umcPlayer, int lives)
     {
         var level = Engine.Scene as Level;
         if (level == null) return;
@@ -152,7 +152,7 @@ public static class LifeHeartManager
         // Create hearts for each life
         for (int i = 0; i < lives; i++)
         {
-            var heart = new LifeHeart(umcPlayer, player, i, lives);
+            var heart = new LifeHeart(umcPlayer, playerEntity, i, lives);
             level.Add(heart);
         }
 

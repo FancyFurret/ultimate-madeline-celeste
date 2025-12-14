@@ -76,7 +76,13 @@ public class UmcBerry : Entity
         var umcPlayer = spawner?.GetUmcPlayer(player);
         if (umcPlayer == null || umcPlayer.InDanceMode) return;
 
+        // Only local players can pick up berries directly
+        if (!umcPlayer.IsLocal) return;
+
         Pickup(player, umcPlayer);
+
+        // Notify network
+        BerryManager.Instance?.RequestBerryPickup(this, umcPlayer);
     }
 
     private void Pickup(Player player, UmcPlayer umcPlayer)
@@ -89,19 +95,46 @@ public class UmcBerry : Entity
         UmcLogger.Info($"Player {umcPlayer.Name} picked up berry");
     }
 
+    /// <summary>
+    /// Called when a remote player picks up this berry (from network message).
+    /// </summary>
+    public void PickupByRemote(UmcPlayer umcPlayer)
+    {
+        if (IsCarried || IsCollected) return;
+
+        Carrier = umcPlayer;
+        _wiggler.Start();
+        Depth = Depths.Top;
+        Audio.Play("event:/game/general/strawberry_touch", Position);
+
+        // For remote players, we don't attach to follower chain (they handle that locally)
+        // Just mark as carried
+        Collidable = false;
+        UmcLogger.Info($"Remote player {umcPlayer.Name} picked up berry");
+    }
+
     private void OnLoseLeader()
     {
         // This is called when the player dies or the follower chain breaks
         // Drop at current position (where berry was last visible, not where player died)
         if (IsCollected) return;
 
-        UmcLogger.Info($"Berry OnLoseLeader: dropping at {Position}, Carrier={Carrier?.Name}");
+        var wasCarrier = Carrier;
+        var dropPos = Position;
+
+        UmcLogger.Info($"Berry OnLoseLeader: dropping at {dropPos}, Carrier={wasCarrier?.Name}");
 
         // Drop at current position (last visible location)
         Carrier = null;
         Depth = Depths.Pickups;
         Collidable = true;
         _wiggler.Start();
+
+        // Broadcast drop if this was a local player's berry
+        if (wasCarrier?.IsLocal == true)
+        {
+            BerryManager.Instance?.BroadcastBerryDropped(this, dropPos);
+        }
     }
 
     /// <summary>
@@ -150,6 +183,33 @@ public class UmcBerry : Entity
         OnBerryCollected?.Invoke(this, collector);
 
         // Remove after collect animation
+        Add(new Coroutine(CollectRoutine()));
+    }
+
+    /// <summary>
+    /// Plays collection effects without triggering scoring (for remote sync).
+    /// </summary>
+    public void CollectVisualOnly()
+    {
+        if (IsCollected) return;
+
+        IsCollected = true;
+
+        // Detach from follower
+        Follower.Leader?.LoseFollower(Follower);
+        Carrier = null;
+
+        // Play collection effects
+        Audio.Play("event:/game/general/strawberry_get", Position, "colour", 0f, "count", 0f);
+        _sprite.Play("collect");
+
+        // Spawn particles
+        if (Scene is Level level)
+        {
+            level.ParticlesFG.Emit(Strawberry.P_Glow, 8, Position, Vector2.One * 6f);
+        }
+
+        // Remove after collect animation (don't invoke OnBerryCollected - host handles scoring)
         Add(new Coroutine(CollectRoutine()));
     }
 

@@ -75,6 +75,9 @@ public class HubPhase : Entity
         {
             PlayerSpawner.Instance?.SpawnAllSessionPlayers(level);
         }
+
+        // Ensure all networked entities are in the new scene
+        NetworkedEntityRegistry.Instance?.EnsureEntitiesInScene();
     }
 
     public override void Removed(Scene scene)

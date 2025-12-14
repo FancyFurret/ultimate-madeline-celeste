@@ -261,10 +261,7 @@ public class CharacterSelection
                 spawner.SpawnLocalPlayer(_hub.Scene as Level, player, spawnPos);
             }
         }
-        else
-        {
-            spawner.SpawnRemotePlayer(_hub.Scene as Level, player);
-        }
+        // Remote players spawn via NetworkedEntity factory when they select a skin
     }
 
     private void HandleSkinCleared(UmcPlayer player, string oldSkinId)

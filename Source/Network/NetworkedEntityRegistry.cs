@@ -38,6 +38,48 @@ public class NetworkedEntityRegistry
     }
 
     /// <summary>
+    /// Ensures all remote entities exist in the current scene.
+    /// Call after level loads to recreate any entities that were lost during transition.
+    /// </summary>
+    public void EnsureEntitiesInScene()
+    {
+        var scene = Engine.Scene;
+        if (scene == null) return;
+
+        int respawnCount = 0;
+        foreach (var kvp in _entities.ToList())
+        {
+            var networkId = kvp.Key;
+            var entity = kvp.Value;
+
+            // Skip local entities - they manage themselves
+            if (entity.IsOwner) continue;
+
+            // Skip if already in current scene
+            if (entity.Entity?.Scene == scene)
+                continue;
+
+            // Recreate via factory using entity's own spawn data
+            if (_factories.TryGetValue(entity.EntityTypeId, out var factory))
+            {
+                _entities.Remove(networkId); // Remove stale reference first
+                var newEntity = factory(networkId, entity.OwnerId, entity.SpawnData);
+                if (newEntity != null)
+                {
+                    scene.Add(newEntity);
+                    respawnCount++;
+                    UmcLogger.Info($"[NetRegistry] Recreated remote entity {networkId} in new scene");
+                }
+            }
+        }
+
+        if (respawnCount > 0)
+        {
+            UmcLogger.Info($"[NetRegistry] Recreated {respawnCount} remote entities after level load");
+        }
+    }
+
+    /// <summary>
     /// Generates a unique network ID by combining the local client ID (top 16 bits)
     /// with an incrementing counter (bottom 16 bits).
     /// </summary>
@@ -53,11 +95,17 @@ public class NetworkedEntityRegistry
         messages.Handle<NetworkedEntityMessage>(HandleEntityMessage);
         messages.Handle<SpawnEntityMessage>(HandleSpawnMessage);
         messages.Handle<DespawnEntityMessage>(HandleDespawnMessage);
+
+        // Hook scene changes to clean up local entities that weren't properly removed
+        On.Monocle.Scene.End += OnSceneEnd;
+
         UmcLogger.Info("NetworkedEntityRegistry initialized");
     }
 
     public void Shutdown()
     {
+        On.Monocle.Scene.End -= OnSceneEnd;
+
         ClearAllEntities();
         _factories.Clear();
         _entityTypes.Clear();
@@ -65,6 +113,40 @@ public class NetworkedEntityRegistry
         _localIdCounter = 0;
         if (Instance == this) Instance = null;
         UmcLogger.Info("[NetRegistry] Shutdown complete");
+    }
+
+    /// <summary>
+    /// Called when a scene ends. Cleans up local entities that weren't properly removed
+    /// due to scene transition bypassing the normal entity removal queue.
+    /// </summary>
+    private void OnSceneEnd(On.Monocle.Scene.orig_End orig, Scene self)
+    {
+        orig(self);
+
+        // Find local entities whose parent entity was in the ending scene
+        var localEntitiesToRemove = _entities
+            .Where(kvp => kvp.Value.IsOwner && kvp.Value.Entity?.Scene == self)
+            .ToList();
+
+        if (localEntitiesToRemove.Count > 0)
+        {
+            UmcLogger.Info($"[NetRegistry] Scene ending - cleaning up {localEntitiesToRemove.Count} local entities");
+
+            foreach (var kvp in localEntitiesToRemove)
+            {
+                var entity = kvp.Value;
+                var networkId = kvp.Key;
+
+                // Broadcast despawn if auto-spawn was enabled
+                if (entity.AutoSpawn)
+                {
+                    BroadcastDespawn(networkId);
+                }
+
+                _entities.Remove(networkId);
+                UmcLogger.Info($"[NetRegistry] Cleaned up local entity: networkId={networkId}");
+            }
+        }
     }
 
     /// <summary>
@@ -288,19 +370,20 @@ public class NetworkedEntityRegistry
 
     private void HandleSpawnMessage(CSteamID sender, SpawnEntityMessage message)
     {
-        UmcLogger.Info($"HandleSpawnMessage: sender={sender.m_SteamID}, message={message}");
-
-        // Don't spawn if we already have this entity
-        if (_entities.ContainsKey(message.NetworkId))
+        // Don't process our own entities
+        if (message.OwnerId == NetworkManager.Instance?.LocalClientId)
         {
-            UmcLogger.Info($"Entity already exists: {message.NetworkId}");
             return;
         }
 
-        // Don't spawn our own entities (we created them locally)
-        if (message.OwnerId == NetworkManager.Instance?.LocalClientId)
+        ProcessSpawn(message);
+    }
+
+    private void ProcessSpawn(SpawnEntityMessage message)
+    {
+        // Don't spawn if we already have this entity in a scene
+        if (_entities.TryGetValue(message.NetworkId, out var existing) && existing.Entity?.Scene != null)
         {
-            UmcLogger.Info($"Skipping spawn - our own entity: {message.NetworkId}");
             return;
         }
 
@@ -313,10 +396,8 @@ public class NetworkedEntityRegistry
         var entity = factory(message.NetworkId, message.OwnerId, message.SpawnData);
         if (entity != null)
         {
-            // Add to current scene
             var scene = Engine.Scene;
             scene?.Add(entity);
-            UmcLogger.Info($"Scene: {scene}");
             UmcLogger.Info($"Spawned remote entity: {message.EntityType} (ID: {message.NetworkId})");
         }
     }
@@ -329,6 +410,7 @@ public class NetworkedEntityRegistry
             if (entity.IsOwner) return;
 
             entity.Entity?.RemoveSelf();
+            _entities.Remove(message.NetworkId);
             UmcLogger.Info($"Despawned remote entity: {message.NetworkId}");
         }
     }

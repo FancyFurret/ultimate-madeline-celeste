@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
@@ -9,7 +10,7 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Entities;
 
 /// <summary>
 /// Custom dead body for UMC that plays the death animation without triggering level reload/screen wipe.
-/// Can be tracked for postmortem features.
+/// Can be tracked for postmortem features. Works with both local Player and RemotePlayer entities.
 /// </summary>
 [Tracked]
 public class UmcPlayerDeadBody : Entity
@@ -24,7 +25,7 @@ public class UmcPlayerDeadBody : Entity
     /// </summary>
     public Action OnDeathComplete;
 
-    private readonly Player _player;
+    private readonly Entity _sourceEntity;
     private readonly PlayerHair _hair;
     private readonly PlayerSprite _sprite;
     private readonly VertexLight _light;
@@ -35,9 +36,12 @@ public class UmcPlayerDeadBody : Entity
     private DeathEffect _deathEffect;
     private bool _finished;
 
+    /// <summary>
+    /// Creates a dead body from a local Player entity.
+    /// </summary>
     public UmcPlayerDeadBody(Player player, Vector2 direction, UmcPlayer umcPlayer) : base(player.Position)
     {
-        _player = player;
+        _sourceEntity = player;
         UmcPlayer = umcPlayer;
         Depth = Depths.Top;
 
@@ -49,6 +53,33 @@ public class UmcPlayerDeadBody : Entity
         Add(_hair = player.Hair);
         Add(_sprite = player.Sprite);
         Add(_light = player.Light);
+
+        _sprite.Color = Color.White;
+        _initialHairColor = _hair.Color;
+
+        // Start the death animation
+        Add(new Coroutine(DeathRoutine()));
+    }
+
+    /// <summary>
+    /// Creates a dead body from a RemotePlayer entity.
+    /// </summary>
+    public UmcPlayerDeadBody(RemotePlayer remotePlayer, Vector2 direction, UmcPlayer umcPlayer) : base(remotePlayer.Position)
+    {
+        _sourceEntity = remotePlayer;
+        UmcPlayer = umcPlayer;
+        Depth = Depths.Top;
+
+        _facing = remotePlayer.Facing;
+        _bounce = direction;
+        _scale = 1f;
+
+        // Take over the remote player's visual components
+        Add(_hair = remotePlayer.Hair);
+        Add(_sprite = remotePlayer.Sprite);
+        // RemotePlayer's light is added in constructor, find it
+        _light = remotePlayer.Get<VertexLight>();
+        if (_light != null) Add(_light);
 
         _sprite.Color = Color.White;
         _initialHairColor = _hair.Color;
@@ -71,7 +102,7 @@ public class UmcPlayerDeadBody : Entity
             else
             {
                 var adjustedBounce = Calc.AngleToVector(
-                    Calc.AngleApproach(_bounce.Angle(), new Vector2(-(float)_player.Facing, 0f).Angle(), 0.5f), 1f);
+                    Calc.AngleApproach(_bounce.Angle(), new Vector2(-(float)_facing, 0f).Angle(), 0.5f), 1f);
 
                 if (adjustedBounce.Y < 0f)
                     _sprite.Play("deadup");

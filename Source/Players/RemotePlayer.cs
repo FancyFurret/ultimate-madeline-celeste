@@ -94,6 +94,13 @@ public class RemotePlayer : Entity
     public override void Removed(Scene scene)
     {
         base.Removed(scene);
+        
+        // Unregister from spawner
+        PlayerSpawner.Instance?.UnregisterRemotePlayer(UmcPlayer);
+        
+        // Untrack from camera
+        CameraController.Instance?.UntrackEntity(this);
+        
         UmcLogger.Info($"Remote player {UmcPlayer.Name} removed from scene");
     }
 

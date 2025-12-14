@@ -52,8 +52,8 @@ public class ScoringPhase
     {
         _level = level;
 
-        // Calculate scores first
-        CalculateScores();
+        // Build display from already-calculated scores
+        BuildScoreDisplay();
 
         // Create and configure scoreboard
         _scoreboard = new Scoreboard();
@@ -77,7 +77,11 @@ public class ScoringPhase
         UmcLogger.Info("ScoringPhase started");
     }
 
-    private void CalculateScores()
+    /// <summary>
+    /// Builds display data from the already-calculated scores in RoundState.
+    /// Scores were calculated by host and synced via PlatformingCompleteMessage.
+    /// </summary>
+    private void BuildScoreDisplay()
     {
         var session = GameSession.Instance;
         var round = RoundState.Current;
@@ -85,10 +89,6 @@ public class ScoringPhase
 
         _isTooEasy = round.DidEveryoneFinish() && session.Players.All.Count > 1;
         _isNoWinners = round.DidNoOneFinish();
-
-        int totalPlayers = session.Players.All.Count;
-        int finisherCount = round.GetFinisherCount();
-        bool isSoloWin = finisherCount == 1 && totalPlayers >= ScoringConfig.SoloMinPlayers;
 
         foreach (var player in session.Players.All)
         {
@@ -100,72 +100,21 @@ public class ScoringPhase
                 SkinId = player.SkinId,
                 SkinName = SkinHelper.GetDisplayName(player.SkinId),
                 Portrait = SkinPortraitHelper.GetPortrait(player.SkinId),
-                IsUnderdog = round.IsUnderdog(player)
+                IsUnderdog = stats.WasUnderdogThisRound
             };
 
-            // Initialize bar progress from previous score
-            row.CurrentBarProgress = stats.TotalScore * ScoringConfig.BarAreaWidth / ScoringConfig.PointsToWin;
+            // Calculate bar progress based on score BEFORE this round's new segments
+            float previousScore = 0f;
+            for (int i = 0; i < stats.RoundStartSegmentIndex && i < stats.ScoreSegments.Count; i++)
+            {
+                previousScore += stats.ScoreSegments[i].Points;
+            }
+            row.CurrentBarProgress = Math.Max(0, previousScore) * ScoringConfig.BarAreaWidth / ScoringConfig.PointsToWin;
             row.AnimatedBarProgress = row.CurrentBarProgress;
 
-            // Track where this round's segments start
-            row.RoundStartSegmentIndex = stats.ScoreSegments.Count;
-
-            stats.WasUnderdogThisRound = row.IsUnderdog;
-
-            // Calculate points if not a special condition round
-            if (!_isTooEasy && !_isNoWinners)
-            {
-                // Finish points
-                if (stats.FinishedThisRound)
-                {
-                    float points = ScoreType.Finish.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.Finish, points);
-                }
-
-                // First place points
-                if (stats.FinishOrder == 0)
-                {
-                    float points = ScoreType.FirstPlace.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.FirstPlace, points);
-                }
-
-                // Trap kill points
-                if (stats.TrapKillsThisRound > 0)
-                {
-                    float points = stats.TrapKillsThisRound * ScoreType.TrapKill.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.TrapKill, points);
-                }
-
-                // Berry points
-                if (stats.BerriesThisRound > 0)
-                {
-                    float points = stats.BerriesThisRound * ScoreType.Berry.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.Berry, points);
-                }
-
-                // Underdog bonus
-                if (stats.FinishedThisRound && row.IsUnderdog)
-                {
-                    float points = ScoreType.UnderdogBonus.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.UnderdogBonus, points);
-                }
-
-                // Solo bonus
-                if (stats.FinishedThisRound && isSoloWin)
-                {
-                    float points = ScoreType.Solo.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.Solo, points);
-                }
-            }
-
-            // Copy all segments to the row for display
+            // Copy all segments and track where new ones start
             row.Segments = new List<ScoreSegment>(stats.ScoreSegments);
+            row.RoundStartSegmentIndex = stats.RoundStartSegmentIndex;
 
             _playerRows.Add(row);
         }
@@ -175,7 +124,7 @@ public class ScoringPhase
             UmcLogger.Info(_isTooEasy ? "Too Easy - no points!" : "No Winners - no points!");
         }
 
-        _winner = RoundState.Current?.GetWinner();
+        _winner = round.GetWinner();
     }
 
     private int GetMaxNewSegmentCount()

@@ -181,7 +181,8 @@ public class LobbyController
                 ClientSteamId = p.ClientId,
                 PlayerIndex = p.SlotIndex,
                 PlayerName = p.Name,
-                SkinId = p.SkinId
+                SkinId = p.SkinId,
+                MaxLives = p.MaxLives
             });
         }
 
@@ -214,6 +215,12 @@ public class LobbyController
             var player = players.Add(playerInfo.ClientSteamId, playerInfo.PlayerIndex, playerInfo.PlayerName, isLocal);
 
             if (player == null) continue;
+
+            // Apply MaxLives from message
+            if (playerInfo.MaxLives > 0)
+            {
+                player.MaxLives = playerInfo.MaxLives;
+            }
 
             // Set skin ID and spawn remote player if they have a skin selected
             if (!isLocal && !string.IsNullOrEmpty(playerInfo.SkinId))

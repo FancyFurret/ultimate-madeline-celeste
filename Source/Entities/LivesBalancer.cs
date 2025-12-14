@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using Celeste.Mod.Entities;
+using Celeste.Mod.UltimateMadelineCeleste.Network;
+using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
+using Steamworks;
 
 namespace Celeste.Mod.UltimateMadelineCeleste.Entities;
 
@@ -58,6 +61,9 @@ public class LivesBalancer : Entity
         scene.Add(_minusBtn);
         scene.Add(_plusBtn);
         scene.Add(_resetBtn);
+
+        // Register network handler for lives changes
+        NetworkManager.Handle<PlayerLivesChangedMessage>(HandlePlayerLivesChanged);
     }
 
     public override void Removed(Scene scene)
@@ -68,12 +74,29 @@ public class LivesBalancer : Entity
         _resetBtn?.RemoveSelf();
     }
 
+    private void HandlePlayerLivesChanged(CSteamID sender, PlayerLivesChangedMessage message)
+    {
+        var session = GameSession.Instance;
+        if (session == null) return;
+
+        var player = session.Players.GetAtSlot(message.PlayerIndex);
+        if (player == null) return;
+
+        // Don't apply to our own local players (we already updated locally)
+        if (player.IsLocal) return;
+
+        player.MaxLives = message.MaxLives;
+        RefreshHearts(player);
+        UmcLogger.Info($"Synced lives for player {player.Name}: {message.MaxLives}");
+    }
+
     private void OnMinus(UmcPlayer p)
     {
         if (p == null || p.MaxLives <= 1) { Audio.Play("event:/ui/main/button_invalid"); return; }
         p.MaxLives--;
         Audio.Play("event:/ui/main/button_toggle_off");
         RefreshHearts(p);
+        BroadcastLivesChanged(p);
     }
 
     private void OnPlus(UmcPlayer p)
@@ -82,6 +105,7 @@ public class LivesBalancer : Entity
         p.MaxLives++;
         Audio.Play("event:/ui/main/button_toggle_on");
         RefreshHearts(p);
+        BroadcastLivesChanged(p);
     }
 
     private void OnReset(UmcPlayer p)
@@ -90,16 +114,42 @@ public class LivesBalancer : Entity
         p.MaxLives = RoundSettings.Current.DefaultLives;
         Audio.Play("event:/ui/main/whoosh_large_in");
         RefreshHearts(p);
+        BroadcastLivesChanged(p);
+    }
+
+    private void BroadcastLivesChanged(UmcPlayer p)
+    {
+        NetworkManager.Broadcast(new PlayerLivesChangedMessage
+        {
+            PlayerIndex = p.SlotIndex,
+            MaxLives = p.MaxLives
+        });
     }
 
     private void RefreshHearts(UmcPlayer p)
     {
         var spawner = PlayerSpawner.Instance;
-        Player entity = spawner?.GetLocalPlayer(p);
-        if (entity != null)
+
+        // Remove existing hearts
+        LifeHeartManager.RemoveAllLives(p);
+
+        UmcLogger.Info($"Refreshing hearts for player {p.Name} with {p.MaxLives} lives");
+
+        // Try local player first
+        Player localEntity = spawner?.GetLocalPlayer(p);
+        if (localEntity != null)
         {
-            LifeHeartManager.RemoveAllLives(p);
-            LifeHeartManager.AttachToPlayer(entity, p, p.MaxLives);
+            UmcLogger.Info($"Attaching hearts to local player {localEntity} with {p.MaxLives} lives");
+            LifeHeartManager.AttachToPlayer(localEntity, p, p.MaxLives);
+            return;
+        }
+
+        // Try remote player
+        RemotePlayer remoteEntity = spawner?.GetRemotePlayer(p);
+        if (remoteEntity != null)
+        {
+            UmcLogger.Info($"Attaching hearts to remote player {remoteEntity} with {p.MaxLives} lives");
+            LifeHeartManager.AttachToPlayer(remoteEntity, p, p.MaxLives);
         }
     }
 
@@ -269,16 +319,6 @@ public class LifeBumper : Solid
         _onHit?.Invoke(umcPlayer);
         _cooldowns[umcPlayer.SlotIndex] = 0.3f;
     }
-
-    // Called when player collides with this solid from any direction
-    // public override void OnCollide(Vector2 dir, Vector2 normal, Player player)
-    // {
-    //     // Player hitting from below (normal pointing down means we hit the bottom)
-    //     if (normal.Y > 0 && player.Speed.Y < 0)
-    //     {
-    //         TriggerHit(player);
-    //     }
-    // }
 
     public override void Render()
     {

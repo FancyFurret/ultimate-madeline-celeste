@@ -90,7 +90,8 @@ public class PlayersController
                 ClientSteamId = LocalClientId,
                 PlayerIndex = slot,
                 PlayerName = playerName,
-                SkinId = player.SkinId
+                SkinId = player.SkinId,
+                MaxLives = player.MaxLives
             });
 
             onComplete?.Invoke(true, slot);
@@ -188,7 +189,8 @@ public class PlayersController
             ClientSteamId = clientId,
             PlayerIndex = slotIndex,
             PlayerName = playerName,
-            SkinId = player.SkinId
+            SkinId = player.SkinId,
+            MaxLives = player.MaxLives
         });
 
         UmcLogger.Info($"Host: Added player {playerName} at slot {slotIndex} for {clientName}");
@@ -237,6 +239,12 @@ public class PlayersController
         var player = Add(message.ClientSteamId, message.PlayerIndex, message.PlayerName, isLocal);
         if (player == null) return;
 
+        // Apply MaxLives from message
+        if (message.MaxLives > 0)
+        {
+            player.MaxLives = message.MaxLives;
+        }
+
         // Apply skin if provided (for lobby state sync)
         if (!isLocal && !string.IsNullOrEmpty(message.SkinId))
         {
@@ -279,10 +287,12 @@ public class PlayersController
             return;
         }
 
+        // Only spawn local players - remote players spawn via NetworkedEntity factory
         if (player.IsLocal)
+        {
             spawner.SpawnLocalPlayer(level, player);
-        else
-            spawner.SpawnRemotePlayer(level, player);
+        }
+        // Remote players will be spawned when we receive their SpawnEntityMessage
     }
 
     internal UmcPlayer Add(ulong clientId, int slot, string name, bool isLocal, InputDevice device = null)

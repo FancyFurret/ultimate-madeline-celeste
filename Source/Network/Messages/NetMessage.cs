@@ -244,6 +244,7 @@ public class PlayerAddedMessage : INetMessage
     public int PlayerIndex { get; set; }
     public string PlayerName { get; set; }
     public string SkinId { get; set; }
+    public int MaxLives { get; set; }
 
     public void Serialize(BinaryWriter writer)
     {
@@ -251,6 +252,7 @@ public class PlayerAddedMessage : INetMessage
         writer.Write(PlayerIndex);
         writer.WriteNullableString(PlayerName);
         writer.WriteNullableString(SkinId);
+        writer.Write((byte)MaxLives);
     }
 
     public void Deserialize(BinaryReader reader)
@@ -259,6 +261,7 @@ public class PlayerAddedMessage : INetMessage
         PlayerIndex = reader.ReadInt32();
         PlayerName = reader.ReadString();
         SkinId = reader.ReadString();
+        MaxLives = reader.ReadByte();
     }
 }
 
@@ -355,5 +358,101 @@ public class ReturnToLobbyMessage : INetMessage
 {
     public void Serialize(BinaryWriter writer) { }
     public void Deserialize(BinaryReader reader) { }
+}
+
+/// <summary>
+/// Sent when a player changes their max lives at the balancer.
+/// </summary>
+public class PlayerLivesChangedMessage : INetMessage
+{
+    public int PlayerIndex { get; set; }
+    public int MaxLives { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerIndex);
+        writer.Write((byte)MaxLives);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerIndex = reader.ReadByte();
+        MaxLives = reader.ReadByte();
+    }
+}
+
+/// <summary>
+/// Sent by client to host when picking up a berry. Host validates and rebroadcasts.
+/// </summary>
+public class BerryPickedMessage : INetMessage
+{
+    public int PlayerIndex { get; set; }
+    public float BerryX { get; set; }
+    public float BerryY { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerIndex);
+        writer.Write(BerryX);
+        writer.Write(BerryY);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerIndex = reader.ReadByte();
+        BerryX = reader.ReadSingle();
+        BerryY = reader.ReadSingle();
+    }
+}
+
+/// <summary>
+/// Sent by client when collecting a berry at the goal (visual sync).
+/// </summary>
+public class BerryCollectedMessage : INetMessage
+{
+    public int PlayerIndex { get; set; }
+    public float BerryX { get; set; }
+    public float BerryY { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PlayerIndex);
+        writer.Write(BerryX);
+        writer.Write(BerryY);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        PlayerIndex = reader.ReadByte();
+        BerryX = reader.ReadSingle();
+        BerryY = reader.ReadSingle();
+    }
+}
+
+/// <summary>
+/// Sent by client when dropping a berry (on death).
+/// </summary>
+public class BerryDroppedMessage : INetMessage
+{
+    public float BerryX { get; set; }   // Original berry position (identity)
+    public float BerryY { get; set; }
+    public float DropX { get; set; }    // Where it dropped
+    public float DropY { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write(BerryX);
+        writer.Write(BerryY);
+        writer.Write(DropX);
+        writer.Write(DropY);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        BerryX = reader.ReadSingle();
+        BerryY = reader.ReadSingle();
+        DropX = reader.ReadSingle();
+        DropY = reader.ReadSingle();
+    }
 }
 
