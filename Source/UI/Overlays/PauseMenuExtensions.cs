@@ -121,6 +121,7 @@ public static class PauseMenuExtensions
             _currentMenu = null;
             UnsubscribeFromConnectionEvents();
 
+            PlayingPhase.Instance?.CleanupAllPhases();
             NetworkManager.Instance?.LeaveSession();
             level.DoScreenWipe(false, () =>
             {

@@ -86,6 +86,7 @@ public class RoundSettings
     /// Minimum players for solo bonus to apply.
     /// </summary>
     public int SoloMinPlayers { get; set; } = 3;
+    public int FirstMinPlayers { get; set; } = 3;
 
     /// <summary>
     /// Total number of rounds to play (0 = unlimited, play until points reached).

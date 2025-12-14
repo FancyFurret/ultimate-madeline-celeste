@@ -186,7 +186,7 @@ public class PlayingPhase : Entity
         UmcLogger.Info("PlayingPhase ended");
     }
 
-    private void CleanupAllPhases()
+    public void CleanupAllPhases()
     {
         _pickingPhase?.Cleanup();
         _pickingPhase = null;

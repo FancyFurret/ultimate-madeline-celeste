@@ -313,7 +313,7 @@ public class PlacingPhase
         }
 
         // Register prop ownership for trap kill tracking
-        RoundState.Current?.RegisterPlacedProp(propInstance, player.SlotIndex);
+        RoundState.Current?.RegisterPlacedProp(propInstance, player);
 
         _placedPlayers.Add(player);
         _inSecondStage.Remove(player);

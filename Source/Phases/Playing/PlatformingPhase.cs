@@ -6,6 +6,7 @@ using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
+using Celeste.Mod.UltimateMadelineCeleste.Props;
 using Celeste.Mod.UltimateMadelineCeleste.Scoring;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
@@ -24,6 +25,12 @@ public class PlatformingPhase
     private float _allDeadTimer;
     private static PlatformingPhase _instance;
     private BerryManager _berryManager;
+
+    /// <summary>
+    /// Tracks the last entity that triggered a deadly collision for each player.
+    /// Updated by PlayerCollider.Check and Player.OnSquish hooks.
+    /// </summary>
+    private static readonly Dictionary<Player, Entity> _lastKillerEntity = new();
 
     /// <summary>
     /// Scores received from host (or calculated if we are host).
@@ -74,6 +81,8 @@ public class PlatformingPhase
         }
 
         On.Celeste.Player.Die += OnPlayerDie;
+        On.Celeste.PlayerCollider.Check += OnPlayerColliderCheck;
+        On.Celeste.Player.OnSquish += OnPlayerOnSquish;
 
         UmcLogger.Info("Started platforming phase - players spawned");
     }
@@ -150,8 +159,8 @@ public class PlatformingPhase
                     stats.AddScoreSegment(ScoreType.Finish, points);
                 }
 
-                // First place points (only with 3+ players)
-                if (stats.FinishOrder == 0 && totalPlayers >= 3)
+                // First place points 
+                if (stats.FinishOrder == 0 && totalPlayers >= ScoringConfig.FirstMinPlayers)
                 {
                     float points = ScoreType.FirstPlace.GetBasePoints();
                     stats.TotalScore += points;
@@ -161,9 +170,12 @@ public class PlatformingPhase
                 // Trap kill points
                 if (stats.TrapKillsThisRound > 0)
                 {
-                    float points = stats.TrapKillsThisRound * ScoreType.TrapKill.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.TrapKill, points);
+                    for (int i = 0; i < stats.TrapKillsThisRound; i++)
+                    {
+                        float points = ScoreType.TrapKill.GetBasePoints();
+                        stats.TotalScore += points;
+                        stats.AddScoreSegment(ScoreType.TrapKill, points);
+                    }
                 }
 
                 // Underdog bonus
@@ -228,6 +240,11 @@ public class PlatformingPhase
         // Don't despawn players here - keep them for scoring phase victory display
         // ScoringPhase.Cleanup will despawn them
         On.Celeste.Player.Die -= OnPlayerDie;
+        On.Celeste.PlayerCollider.Check -= OnPlayerColliderCheck;
+        On.Celeste.Player.OnSquish -= OnPlayerOnSquish;
+
+        // Clear killer tracking
+        _lastKillerEntity.Clear();
 
         // Clean up custom dead bodies
         foreach (var deadBody in _customDeadBodies)
@@ -267,10 +284,13 @@ public class PlatformingPhase
         if (_instance == null)
             return orig(self, direction, evenIfInvincible, registerDeathInStats);
 
+        // Detect killer before player is removed from scene
+        var killer = FindKiller(self, umcPlayer);
+
         // Calculate new lives and apply death
         var stats = RoundState.Current?.GetPlayerStats(umcPlayer);
         int livesRemaining = (stats?.LivesRemaining ?? 1) - 1;
-        bool isEliminated = _instance.ApplyPlayerDeath(umcPlayer, livesRemaining, null);
+        bool isEliminated = _instance.ApplyPlayerDeath(umcPlayer, livesRemaining, killer);
         bool shouldRespawn = !isEliminated;
 
         // Release followers (berries) before removing the player
@@ -316,16 +336,81 @@ public class PlatformingPhase
             };
         }
 
-        // Broadcast the death with explicit lives remaining
+        // Broadcast the death with explicit lives remaining and killer info
         NetworkManager.Broadcast(new PlayerDeathSyncMessage
         {
             PlayerIndex = umcPlayer.SlotIndex,
             LivesRemaining = livesRemaining,
-            KillerSlotIndex = -1 // TODO: Track killer from trap
+            KillerIndex = killer?.SlotIndex ?? -1
         });
 
         // Return null since we didn't create a vanilla PlayerDeadBody
         return null;
+    }
+
+    /// <summary>
+    /// Hook for PlayerCollider.Check - tracks the entity that triggered a deadly collision.
+    /// Called when any entity with a PlayerCollider (spinners, spikes, lava, etc.) checks for player collision.
+    /// We must track BEFORE calling orig because Die() is called inside orig's OnCollide callback.
+    /// </summary>
+    private static bool OnPlayerColliderCheck(On.Celeste.PlayerCollider.orig_Check orig, PlayerCollider self, Player player)
+    {
+        // Track this entity BEFORE the check, so it's available if this collision triggers Die
+        if (self.Entity != null)
+        {
+            _lastKillerEntity[player] = self.Entity;
+        }
+
+        return orig(self, player);
+    }
+
+    /// <summary>
+    /// Hook for Player.OnSquish - tracks the solid that crushed the player.
+    /// Called when a player is being squished by a moving solid (Kevin, ZipMover, etc.)
+    /// </summary>
+    private static void OnPlayerOnSquish(On.Celeste.Player.orig_OnSquish orig, Player self, CollisionData data)
+    {
+        // Track the pusher before the squish is processed (which may call Die)
+        if (data.Pusher != null)
+        {
+            _lastKillerEntity[self] = data.Pusher;
+        }
+
+        orig(self, data);
+    }
+
+    /// <summary>
+    /// Finds the player who owns the trap that killed this player.
+    /// Uses the entity tracked by PlayerCollider.Check or Player.OnSquish hooks.
+    /// Returns null if killed by environment or self.
+    /// </summary>
+    private static UmcPlayer FindKiller(Player player, UmcPlayer victim)
+    {
+        // Get the tracked killer entity
+        if (!_lastKillerEntity.TryGetValue(player, out var killerEntity) || killerEntity == null)
+        {
+            return null;
+        }
+
+        // Clear the tracking for this player
+        _lastKillerEntity.Remove(player);
+
+        // Look up the owner of this entity
+        var killer = RoundState.Current?.GetPropOwner(killerEntity);
+        if (killer == null)
+        {
+            return null;
+        }
+
+        // Doesn't count if you kill yourself
+        if (killer == victim)
+        {
+            UmcLogger.Info($"Player {victim.Name} killed by own trap ({killerEntity.GetType().Name}) - no credit");
+            return null;
+        }
+
+        UmcLogger.Info($"Player {victim.Name} killed by {killerEntity.GetType().Name} owned by {killer.Name}");
+        return killer;
     }
 
     public void RespawnPlayer(UmcPlayer umcPlayer)
@@ -341,7 +426,7 @@ public class PlatformingPhase
     /// Applies death stats and effects for a player (shared between local and remote deaths).
     /// Returns true if the player was eliminated (no lives remaining).
     /// </summary>
-    private bool ApplyPlayerDeath(UmcPlayer player, int livesRemaining, int? killerSlotIndex)
+    private bool ApplyPlayerDeath(UmcPlayer player, int livesRemaining, UmcPlayer killer)
     {
         var stats = RoundState.Current?.GetPlayerStats(player);
         if (stats != null)
@@ -353,9 +438,9 @@ public class PlatformingPhase
         }
 
         // Record trap kill if killed by another player
-        if (killerSlotIndex.HasValue && killerSlotIndex.Value >= 0 && killerSlotIndex.Value != player.SlotIndex)
+        if (killer != null)
         {
-            RoundState.Current?.RecordTrapKill(killerSlotIndex.Value);
+            RoundState.Current?.RecordTrapKill(killer);
         }
 
         // Break a heart
@@ -474,8 +559,8 @@ public class PlatformingPhase
         var remotePlayer = spawner?.GetRemotePlayer(player);
 
         // Apply death stats, break heart, and handle elimination
-        int? killerSlot = message.KillerSlotIndex >= 0 ? message.KillerSlotIndex : null;
-        bool isEliminated = ApplyPlayerDeath(player, message.LivesRemaining, killerSlot);
+        var killer = message.KillerIndex >= 0 ? session.Players.GetAtSlot(message.KillerIndex) : null;
+        bool isEliminated = ApplyPlayerDeath(player, message.LivesRemaining, killer);
 
         // Create death animation if we have the remote player entity
         if (remotePlayer != null && level != null)
@@ -608,20 +693,20 @@ public class PlayerDeathSyncMessage : INetMessage
 {
     public int PlayerIndex { get; set; }
     public int LivesRemaining { get; set; }
-    public int KillerSlotIndex { get; set; } = -1; // -1 = no killer (self/environment)
+    public int KillerIndex { get; set; } = -1; // -1 = no killer (self/environment), otherwise slot index of killer
 
     public void Serialize(BinaryWriter writer)
     {
         writer.Write((byte)PlayerIndex);
         writer.Write((sbyte)LivesRemaining);
-        writer.Write((sbyte)KillerSlotIndex);
+        writer.Write((sbyte)KillerIndex);
     }
 
     public void Deserialize(BinaryReader reader)
     {
         PlayerIndex = reader.ReadByte();
         LivesRemaining = reader.ReadSByte();
-        KillerSlotIndex = reader.ReadSByte();
+        KillerIndex = reader.ReadSByte();
     }
 }
 

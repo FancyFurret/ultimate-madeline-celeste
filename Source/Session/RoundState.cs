@@ -112,38 +112,16 @@ public class RoundState
     }
 
     /// <summary>
-    /// Records a death for a player.
+    /// Records a trap kill for a player.
     /// </summary>
-    public void RecordPlayerDeath(UmcPlayer player, int? killerSlotIndex = null)
+    public void RecordTrapKill(UmcPlayer killer)
     {
-        var stats = GetPlayerStats(player);
-        stats.TotalDeaths++;
-        stats.DiedThisRound = true;
-        UmcLogger.Info($"Player {player.Name} died (total deaths: {stats.TotalDeaths})");
+        if (killer == null) return;
 
-        // If killed by another player's trap, record the kill
-        if (killerSlotIndex.HasValue && killerSlotIndex.Value != player.SlotIndex)
-        {
-            RecordTrapKill(killerSlotIndex.Value);
-        }
-    }
-
-    /// <summary>
-    /// Records a trap kill for the owner of a prop.
-    /// </summary>
-    public void RecordTrapKill(int killerSlotIndex)
-    {
-        if (!PlayerStats.TryGetValue(killerSlotIndex, out var stats))
-        {
-            var session = GameSession.Instance;
-            var killer = session?.Players.GetAtSlot(killerSlotIndex);
-            stats = new PlayerRoundStats(killerSlotIndex, killer?.MaxLives ?? 0);
-            PlayerStats[killerSlotIndex] = stats;
-        }
-
+        var stats = GetPlayerStats(killer);
         stats.TrapKillsThisRound++;
         stats.TotalTrapKills++;
-        UmcLogger.Info($"Player at slot {killerSlotIndex} got a trap kill! (total: {stats.TotalTrapKills}, this round: {stats.TrapKillsThisRound})");
+        UmcLogger.Info($"{killer.Name} got a trap kill! (total: {stats.TotalTrapKills}, this round: {stats.TrapKillsThisRound})");
     }
 
     /// <summary>
@@ -257,41 +235,28 @@ public class RoundState
     /// <summary>
     /// Registers a placed prop with its owner.
     /// </summary>
-    public void RegisterPlacedProp(PropInstance prop, int ownerSlotIndex)
+    public void RegisterPlacedProp(PropInstance prop, UmcPlayer owner)
     {
-        if (prop?.Entity == null) return;
+        if (prop?.Entity == null || owner == null) return;
 
         PlacedProps.Add(new PlacedProp
         {
             Prop = prop,
             Entity = prop.Entity,
-            OwnerSlotIndex = ownerSlotIndex
+            Owner = owner
         });
-        UmcLogger.Info($"Registered prop: {prop.Prop.Name} placed by player {ownerSlotIndex}");
+        UmcLogger.Info($"Registered prop: {prop.Prop.Name} placed by {owner.Name}");
     }
 
     /// <summary>
-    /// Gets the owner slot index for an entity, or -1 if not found.
+    /// Gets the owner of a placed prop entity, or null if not found.
     /// </summary>
-    public int GetPropOwner(Entity entity)
+    public UmcPlayer GetPropOwner(Entity entity)
     {
-        if (entity == null) return -1;
+        if (entity == null) return null;
 
         var placed = PlacedProps.FirstOrDefault(p => p.Entity == entity);
-        return placed?.OwnerSlotIndex ?? -1;
-    }
-
-    /// <summary>
-    /// Records a trap kill if the entity belongs to another player.
-    /// </summary>
-    public void RecordTrapKillFromEntity(Entity killerEntity, UmcPlayer victim)
-    {
-        if (killerEntity == null || victim == null) return;
-
-        var ownerSlot = GetPropOwner(killerEntity);
-        if (ownerSlot < 0 || ownerSlot == victim.SlotIndex) return;
-
-        RecordTrapKill(ownerSlot);
+        return placed?.Owner;
     }
 
     /// <summary>
@@ -314,7 +279,7 @@ public class PlacedProp
 {
     public PropInstance Prop { get; set; }
     public Entity Entity { get; set; }
-    public int OwnerSlotIndex { get; set; }
+    public UmcPlayer Owner { get; set; }
 }
 
 /// <summary>
