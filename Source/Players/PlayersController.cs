@@ -305,7 +305,8 @@ public class PlayersController
             SlotIndex = slot,
             Name = name ?? $"Player {slot + 1}",
             IsLocal = isLocal,
-            Device = device
+            Device = device,
+            MaxLives = RoundSettings.Current.DefaultLives
         };
 
         All.Add(player);

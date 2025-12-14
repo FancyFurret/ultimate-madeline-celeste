@@ -81,9 +81,13 @@ public class RoundState
         _finishOrderCounter = 0;
 
         // Reset round-specific stats but keep cumulative scores
-        foreach (var stats in PlayerStats.Values)
+        // Use player's MaxLives (from balancer) instead of default
+        var session = GameSession.Instance;
+        foreach (var kvp in PlayerStats)
         {
-            stats.ResetForNewRound();
+            var player = session?.Players.GetAtSlot(kvp.Key);
+            int lives = player?.MaxLives ?? RoundSettings.Current.DefaultLives;
+            kvp.Value.ResetForNewRound(lives);
         }
 
         // Clear placed props for new round
@@ -101,7 +105,7 @@ public class RoundState
     {
         if (!PlayerStats.TryGetValue(player.SlotIndex, out var stats))
         {
-            stats = new PlayerRoundStats(player.SlotIndex);
+            stats = new PlayerRoundStats(player.SlotIndex, player.MaxLives);
             PlayerStats[player.SlotIndex] = stats;
         }
         return stats;
@@ -113,9 +117,9 @@ public class RoundState
     public void RecordPlayerDeath(UmcPlayer player, int? killerSlotIndex = null)
     {
         var stats = GetPlayerStats(player);
-        stats.Deaths++;
+        stats.TotalDeaths++;
         stats.DiedThisRound = true;
-        UmcLogger.Info($"Player {player.Name} died (total deaths: {stats.Deaths})");
+        UmcLogger.Info($"Player {player.Name} died (total deaths: {stats.TotalDeaths})");
 
         // If killed by another player's trap, record the kill
         if (killerSlotIndex.HasValue && killerSlotIndex.Value != player.SlotIndex)
@@ -131,7 +135,9 @@ public class RoundState
     {
         if (!PlayerStats.TryGetValue(killerSlotIndex, out var stats))
         {
-            stats = new PlayerRoundStats(killerSlotIndex);
+            var session = GameSession.Instance;
+            var killer = session?.Players.GetAtSlot(killerSlotIndex);
+            stats = new PlayerRoundStats(killerSlotIndex, killer?.MaxLives ?? 0);
             PlayerStats[killerSlotIndex] = stats;
         }
 
@@ -328,7 +334,10 @@ public class PlayerRoundStats
 {
     public int SlotIndex { get; }
 
-    // Cumulative stats (persist across rounds) - FLOATS for fractional scoring
+    // Lives
+    public int LivesRemaining { get; set; }
+
+    // Cumulative stats (persist across rounds)
     public float TotalScore { get; set; }
     public int TotalDeaths { get; set; }
     public int TotalBerries { get; set; }
@@ -336,13 +345,6 @@ public class PlayerRoundStats
 
     // All score segments earned (persists across rounds for display)
     public List<ScoreSegment> ScoreSegments { get; } = new();
-
-    // Legacy property for compatibility
-    public int Deaths
-    {
-        get => TotalDeaths;
-        set => TotalDeaths = value;
-    }
 
     // Per-round stats (reset each round)
     public bool FinishedThisRound { get; set; }
@@ -352,10 +354,10 @@ public class PlayerRoundStats
     public int TrapKillsThisRound { get; set; }
     public bool WasUnderdogThisRound { get; set; }
 
-    public PlayerRoundStats(int slotIndex)
+    public PlayerRoundStats(int slotIndex, int startingLives)
     {
         SlotIndex = slotIndex;
-        ResetForNewRound();
+        LivesRemaining = startingLives;
     }
 
     /// <summary>
@@ -370,7 +372,7 @@ public class PlayerRoundStats
     /// <summary>
     /// Resets per-round stats for a new round.
     /// </summary>
-    public void ResetForNewRound()
+    public void ResetForNewRound(int startingLives)
     {
         FinishedThisRound = false;
         DiedThisRound = false;
@@ -378,5 +380,6 @@ public class PlayerRoundStats
         BerriesThisRound = 0;
         TrapKillsThisRound = 0;
         WasUnderdogThisRound = false;
+        LivesRemaining = startingLives;
     }
 }

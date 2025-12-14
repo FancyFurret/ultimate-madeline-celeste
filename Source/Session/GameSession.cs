@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Celeste.Mod.UltimateMadelineCeleste.Phases;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;

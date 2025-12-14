@@ -70,6 +70,13 @@ public class RoundSettings
     /// </summary>
     public float PointsToWin { get; set; } = 5.0f;
 
+    // ============== LIVES ==============
+
+    /// <summary>
+    /// Default number of lives per player each round (0 = no respawns).
+    /// </summary>
+    public int DefaultLives { get; set; } = 0;
+
     /// <summary>
     /// Point difference required to be considered an underdog.
     /// </summary>
@@ -122,6 +129,7 @@ public class RoundSettings
     {
         Name = "Default",
         PointsToWin = 5.0f,
+        DefaultLives = 1,
         UnderdogThreshold = 1.5f,
         SoloMinPlayers = 3,
         MaxRounds = 0,

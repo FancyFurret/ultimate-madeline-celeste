@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Celeste.Mod.SkinModHelper;
+using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
@@ -166,6 +167,13 @@ public class PlayerSpawner : HookedFeature<PlayerSpawner>
 
         // Send player graphics to other clients so they have the animation map
         PlayerStateSync.Instance?.SendPlayerGraphics(umcPlayer, player);
+
+        // Attach life hearts if lives system is enabled
+        int lives = RoundState.Current?.GetPlayerStats(umcPlayer)?.LivesRemaining ?? umcPlayer.MaxLives;
+        if (lives > 0)
+        {
+            LifeHeartManager.AttachToPlayer(player, umcPlayer, lives);
+        }
 
         return player;
     }

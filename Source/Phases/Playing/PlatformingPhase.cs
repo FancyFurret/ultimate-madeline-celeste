@@ -147,6 +147,19 @@ public class PlatformingPhase
         if (_instance == null)
             return orig(self, direction, evenIfInvincible, registerDeathInStats);
 
+        // Record death in stats and consume a life
+        var stats = RoundState.Current?.GetPlayerStats(umcPlayer);
+        if (stats != null)
+        {
+            stats.TotalDeaths++;
+            stats.DiedThisRound = true;
+            stats.LivesRemaining--;
+        }
+
+        // Break a heart
+        LifeHeartManager.RemoveOneLife(umcPlayer);
+        bool shouldRespawn = stats?.LivesRemaining > 0;
+
         // Don't call orig - create our own custom dead body instead
         var customDeadBody = new UmcPlayerDeadBody(self, direction, umcPlayer);
         self.Scene?.Add(customDeadBody);
@@ -157,17 +170,38 @@ public class PlatformingPhase
         // Track the custom dead body
         _instance._customDeadBodies.Add(customDeadBody);
 
-        // Mark player as dead
-        _instance._deadPlayers.Add(umcPlayer);
-        UmcLogger.Info($"Player {umcPlayer.Name} died");
-
-        // Track the dead body with camera, untrack when animation completes
+        // Track the dead body with camera
         CameraController.Instance?.TrackEntity(customDeadBody);
-        customDeadBody.OnDeathComplete = () =>
+
+        if (shouldRespawn)
         {
-            CameraController.Instance?.UntrackEntity(customDeadBody);
-            _instance?.UntrackPlayer(umcPlayer);
-        };
+            // Player has lives remaining - respawn after death animation
+            UmcLogger.Info($"Player {umcPlayer.Name} died, {stats?.LivesRemaining ?? 0} lives remaining");
+            customDeadBody.OnDeathComplete = () =>
+            {
+                CameraController.Instance?.UntrackEntity(customDeadBody);
+                customDeadBody.Cleanup();
+                _instance?._customDeadBodies.Remove(customDeadBody);
+
+                // Respawn the player
+                _instance?.RespawnPlayer(umcPlayer);
+            };
+        }
+        else
+        {
+            // Player is eliminated (no lives remaining)
+            _instance._deadPlayers.Add(umcPlayer);
+            UmcLogger.Info($"Player {umcPlayer.Name} eliminated (no lives remaining)");
+
+            customDeadBody.OnDeathComplete = () =>
+            {
+                CameraController.Instance?.UntrackEntity(customDeadBody);
+                _instance?.UntrackPlayer(umcPlayer);
+            };
+
+            // Check if all players are now dead
+            _instance.CheckAllPlayersDead();
+        }
 
         // Berry dropping is handled by UmcBerry.OnLoseLeader
 
@@ -176,12 +210,10 @@ public class PlatformingPhase
         {
             NetworkManager.Broadcast(new PlayerDeathSyncMessage
             {
-                PlayerIndex = umcPlayer.SlotIndex
+                PlayerIndex = umcPlayer.SlotIndex,
+                IsEliminated = !shouldRespawn
             });
         }
-
-        // Check if all players are now dead
-        _instance.CheckAllPlayersDead();
 
         // Return null since we didn't create a vanilla PlayerDeadBody
         return null;
@@ -207,6 +239,7 @@ public class PlatformingPhase
 
         spawner.RespawnAllSessionPlayers(level);
     }
+
 
     private void CheckAllPlayersDead()
     {
@@ -293,16 +326,42 @@ public class PlatformingPhase
         var player = session.Players.GetAtSlot(message.PlayerIndex);
         if (player == null) return;
 
-        // Don't double-count if already dead
-        if (_deadPlayers.Contains(player)) return;
+        if (message.IsEliminated)
+        {
+            // Don't double-count if already dead
+            if (_deadPlayers.Contains(player)) return;
 
-        _deadPlayers.Add(player);
-        UmcLogger.Info($"Synced death for player {player.Name}");
+            _deadPlayers.Add(player);
+            UmcLogger.Info($"Synced elimination for player {player.Name}");
 
-        // Despawn the remote player so they're no longer visible or tracked by camera
-        PlayerSpawner.Instance?.DespawnPlayer(player);
+            // Despawn the remote player so they're no longer visible or tracked by camera
+            PlayerSpawner.Instance?.DespawnPlayer(player);
 
-        CheckAllPlayersDead();
+            // Update state - record death and mark as eliminated
+            var stats = RoundState.Current?.GetPlayerStats(player);
+            if (stats != null)
+            {
+                stats.TotalDeaths++;
+                stats.DiedThisRound = true;
+                stats.LivesRemaining = 0;
+            }
+
+            CheckAllPlayersDead();
+        }
+        else
+        {
+            // Player died but will respawn - just log it
+            UmcLogger.Info($"Synced death for player {player.Name} (will respawn)");
+
+            // Record death and consume a life
+            var stats = RoundState.Current?.GetPlayerStats(player);
+            if (stats != null)
+            {
+                stats.TotalDeaths++;
+                stats.DiedThisRound = true;
+                stats.LivesRemaining--;
+            }
+        }
     }
 
     private void HandlePlayerFinishedSync(CSteamID sender, PlayerFinishedSyncMessage message)
@@ -341,15 +400,18 @@ public class PlatformingPhase
 public class PlayerDeathSyncMessage : INetMessage
 {
     public int PlayerIndex { get; set; }
+    public bool IsEliminated { get; set; }
 
     public void Serialize(BinaryWriter writer)
     {
         writer.Write((byte)PlayerIndex);
+        writer.Write(IsEliminated);
     }
 
     public void Deserialize(BinaryReader reader)
     {
         PlayerIndex = reader.ReadByte();
+        IsEliminated = reader.ReadBoolean();
     }
 }
 

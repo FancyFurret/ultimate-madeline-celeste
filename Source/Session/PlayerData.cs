@@ -37,6 +37,12 @@ public class UmcPlayer
     public RemotePlayerNetworkState LastNetworkState { get; set; }
 
     /// <summary>
+    /// Maximum/starting lives for this player. Set from RoundSettings.DefaultLives.
+    /// Used in lobby to display lives. During gameplay, use RoundState stats instead.
+    /// </summary>
+    public int MaxLives { get; set; }
+
+    /// <summary>
     /// When true, player can change facing direction but cannot move.
     /// </summary>
     public bool InDanceMode { get; private set; }
@@ -53,6 +59,7 @@ public class UmcPlayer
 
     /// <summary>
     /// Resets transient state (dance mode, hidden) for lobby return or new game.
+    /// Note: MaxLives is NOT reset here - it persists from balancer settings.
     /// </summary>
     public void ResetState()
     {
