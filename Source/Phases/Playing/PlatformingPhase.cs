@@ -166,14 +166,6 @@ public class PlatformingPhase
                     stats.AddScoreSegment(ScoreType.TrapKill, points);
                 }
 
-                // Berry points
-                if (stats.BerriesThisRound > 0)
-                {
-                    float points = stats.BerriesThisRound * ScoreType.Berry.GetBasePoints();
-                    stats.TotalScore += points;
-                    stats.AddScoreSegment(ScoreType.Berry, points);
-                }
-
                 // Underdog bonus
                 if (stats.FinishedThisRound && isUnderdog)
                 {
@@ -188,6 +180,17 @@ public class PlatformingPhase
                     float points = ScoreType.Solo.GetBasePoints();
                     stats.TotalScore += points;
                     stats.AddScoreSegment(ScoreType.Solo, points);
+                }
+            }
+
+            // Berry points - each berry is a separate segment, and berries always count (even if "too easy")
+            if (stats.BerriesThisRound > 0)
+            {
+                float pointsPerBerry = ScoreType.Berry.GetBasePoints();
+                for (int i = 0; i < stats.BerriesThisRound; i++)
+                {
+                    stats.TotalScore += pointsPerBerry;
+                    stats.AddScoreSegment(ScoreType.Berry, pointsPerBerry);
                 }
             }
 
@@ -270,6 +273,10 @@ public class PlatformingPhase
         bool isEliminated = _instance.ApplyPlayerDeath(umcPlayer, livesRemaining, null);
         bool shouldRespawn = !isEliminated;
 
+        // Release followers (berries) before removing the player
+        // This triggers OnLoseLeader on each follower, allowing berries to drop properly
+        self.Leader?.LoseFollowers();
+
         // Don't call orig - create our own custom dead body instead
         var customDeadBody = new UmcPlayerDeadBody(self, direction, umcPlayer);
         self.Scene?.Add(customDeadBody);
@@ -308,8 +315,6 @@ public class PlatformingPhase
                 _instance?.UntrackPlayer(umcPlayer);
             };
         }
-
-        // Berry dropping is handled by UmcBerry.OnLoseLeader
 
         // Broadcast the death with explicit lives remaining
         NetworkManager.Broadcast(new PlayerDeathSyncMessage
@@ -478,6 +483,9 @@ public class PlatformingPhase
             // Random death direction (we don't have the actual direction from the killer)
             var direction = new Vector2(Calc.Random.Choose(-1, 1), -1f);
             direction.Normalize();
+
+            // Release followers (berries) before removing the remote player
+            remotePlayer.Leader?.LoseFollowers();
 
             var deadBody = new UmcPlayerDeadBody(remotePlayer, direction, player);
             level.Add(deadBody);

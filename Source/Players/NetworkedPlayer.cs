@@ -173,9 +173,6 @@ public class NetworkedPlayerComponent : Component
     private float _networkSyncTimer;
     private Dictionary<string, int> _animationMap = new();
 
-    // For remote players - attached berries that follow locally
-    private readonly List<UmcBerry> _attachedBerries = new();
-
     public NetworkedPlayerComponent(UmcPlayer umcPlayer, Vector2 spawnPosition)
         : base(active: true, visible: false)
     {
@@ -253,12 +250,20 @@ public class NetworkedPlayerComponent : Component
 
     public override void Removed(Entity entity)
     {
-        // Clean up attached berries
-        foreach (var berry in _attachedBerries)
+        // Clean up attached berries via Leader
+        var remotePlayer = entity as RemotePlayer;
+        if (remotePlayer?.Leader != null)
         {
-            berry?.Drop(berry.Position);
+            // Drop all berries at their current positions
+            foreach (var follower in remotePlayer.Leader.Followers.ToList())
+            {
+                if (follower.Entity is UmcBerry berry)
+                {
+                    berry.Drop(berry.Position);
+                }
+            }
+            remotePlayer.Leader.LoseFollowers();
         }
-        _attachedBerries.Clear();
 
         base.Removed(entity);
     }
@@ -271,10 +276,7 @@ public class NetworkedPlayerComponent : Component
         {
             UpdateLocalPlayer();
         }
-        else
-        {
-            UpdateRemoteFollowers();
-        }
+        // Remote players: Leader.Update() handles follower positioning automatically
     }
 
     private void UpdateLocalPlayer()
@@ -421,16 +423,15 @@ public class NetworkedPlayerComponent : Component
 
     /// <summary>
     /// Syncs followers by attaching/detaching berries based on what the remote player is carrying.
-    /// Positions are computed locally using the remote player's position.
+    /// Uses Celeste's actual Leader/Follower system for authentic trailing behavior.
     /// </summary>
     private void SyncFollowerBerries(List<Vector2> berrySpawnPositions)
     {
         var remotePlayer = Entity as RemotePlayer;
-        if (remotePlayer == null) return;
+        if (remotePlayer?.Leader == null) return;
 
-        var berryManager = BerryManager.Instance;
         var level = Entity.Scene as Level;
-        if (berryManager == null || level == null) return;
+        if (level == null) return;
 
         // Find berries that should be attached
         var shouldBeAttached = new HashSet<UmcBerry>();
@@ -443,52 +444,37 @@ public class NetworkedPlayerComponent : Component
             }
         }
 
-        // Detach berries that are no longer being carried
-        for (int i = _attachedBerries.Count - 1; i >= 0; i--)
+        // Get currently attached berries from Leader
+        var currentlyAttached = new List<UmcBerry>();
+        foreach (var follower in remotePlayer.Leader.Followers)
         {
-            var berry = _attachedBerries[i];
+            if (follower.Entity is UmcBerry berry)
+            {
+                currentlyAttached.Add(berry);
+            }
+        }
+
+        // Detach berries that are no longer being carried
+        foreach (var berry in currentlyAttached)
+        {
             if (!shouldBeAttached.Contains(berry))
             {
                 // Berry was dropped - let it fall at its current position
                 berry.Drop(berry.Position);
-                _attachedBerries.RemoveAt(i);
             }
         }
 
-        // Attach new berries
+        // Attach new berries to Leader
         foreach (var berry in shouldBeAttached)
         {
-            if (!_attachedBerries.Contains(berry))
+            if (!currentlyAttached.Contains(berry))
             {
+                // Mark as carried by remote player
                 berry.PickupByRemote(UmcPlayer);
-                _attachedBerries.Add(berry);
+
+                // Attach to Leader's follower system for proper trailing
+                remotePlayer.Leader.GainFollower(berry.Follower);
             }
-        }
-    }
-
-    /// <summary>
-    /// Updates follower positions to trail behind the remote player.
-    /// </summary>
-    private void UpdateRemoteFollowers()
-    {
-        var remotePlayer = Entity as RemotePlayer;
-        if (remotePlayer == null || _attachedBerries.Count == 0) return;
-
-        // Simple trailing behavior - berries follow with delay
-        Vector2 followPos = remotePlayer.Position;
-        const float followDistance = 12f;
-
-        for (int i = 0; i < _attachedBerries.Count; i++)
-        {
-            var berry = _attachedBerries[i];
-            if (berry == null || berry.Scene == null) continue;
-
-            // Lerp toward follow position
-            Vector2 targetPos = followPos - new Vector2(0, (i + 1) * followDistance);
-            float t = 1f - (float)Math.Exp(-8f * Engine.DeltaTime);
-            berry.Position = Vector2.Lerp(berry.Position, targetPos, t);
-
-            followPos = berry.Position;
         }
     }
 

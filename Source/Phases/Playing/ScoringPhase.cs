@@ -41,6 +41,7 @@ public class ScoringPhase
     // Special conditions
     private bool _isTooEasy;
     private bool _isNoWinners;
+    private bool _hasAnyNewSegments;
 
     // Victory
     private UmcPlayer _winner;
@@ -58,7 +59,9 @@ public class ScoringPhase
         // Create and configure scoreboard
         _scoreboard = new Scoreboard();
         _scoreboard.SetPlayerData(_playerRows);
-        _scoreboard.SetSpecialMessage(_isTooEasy, _isNoWinners);
+        // Only show special message if there are no segments to animate (berries still count)
+        bool showSpecialMessage = (_isTooEasy || _isNoWinners) && !_hasAnyNewSegments;
+        _scoreboard.SetSpecialMessage(showSpecialMessage && _isTooEasy, showSpecialMessage && _isNoWinners);
         _scoreboard.SetMaxSegmentCount(GetMaxNewSegmentCount());
 
         // Subscribe to scoreboard events
@@ -119,9 +122,15 @@ public class ScoringPhase
             _playerRows.Add(row);
         }
 
+        // Check if there are any new segments to animate (e.g., berries still count in "too easy" rounds)
+        _hasAnyNewSegments = _playerRows.Any(r => r.NewSegmentCount > 0);
+
         if (_isTooEasy || _isNoWinners)
         {
-            UmcLogger.Info(_isTooEasy ? "Too Easy - no points!" : "No Winners - no points!");
+            if (_hasAnyNewSegments)
+                UmcLogger.Info(_isTooEasy ? "Too Easy - but has berry points to show!" : "No Winners - but has berry points to show!");
+            else
+                UmcLogger.Info(_isTooEasy ? "Too Easy - no points!" : "No Winners - no points!");
         }
 
         _winner = round.GetWinner();
@@ -129,7 +138,7 @@ public class ScoringPhase
 
     private int GetMaxNewSegmentCount()
     {
-        if (_isTooEasy || _isNoWinners || _playerRows.Count == 0)
+        if (_playerRows.Count == 0)
             return 0;
 
         return _playerRows.Max(r => r.NewSegmentCount);
@@ -162,7 +171,8 @@ public class ScoringPhase
     {
         _phaseTimer = 0f;
 
-        if (_isTooEasy || _isNoWinners)
+        // Show special message only if "too easy" or "no winners" AND no segments to animate (e.g., no berries)
+        if ((_isTooEasy || _isNoWinners) && !_hasAnyNewSegments)
         {
             _currentPhase = Phase.ShowSpecialMessage;
             _scoreboard.ShowSpecialMessage();

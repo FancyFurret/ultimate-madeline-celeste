@@ -41,6 +41,12 @@ public class RemotePlayer : Entity
     private const float DashTrailInterval = 0.1f;
     private bool _wasDashing;
 
+    /// <summary>
+    /// Leader component for follower entities (berries) to trail behind this remote player.
+    /// Uses Celeste's actual Leader/Follower system for authentic trailing behavior.
+    /// </summary>
+    public Leader Leader { get; private set; }
+
     public RemotePlayer(UmcPlayer umcPlayer, Vector2 position) : base(position)
     {
         UmcPlayer = umcPlayer;
@@ -49,6 +55,10 @@ public class RemotePlayer : Entity
 
         CreateSprite(PlayerSpriteMode.Madeline);
         Add(new VertexLight(new Vector2(0f, -8f), Color.White, 1f, 32, 64));
+
+        // Add Leader for follower entities (berries) - same as real Player
+        Add(Leader = new Leader(new Vector2(0f, -8f)));
+
         Tag = Tags.Persistent | Tags.PauseUpdate | Tags.TransitionUpdate;
     }
 
@@ -94,13 +104,13 @@ public class RemotePlayer : Entity
     public override void Removed(Scene scene)
     {
         base.Removed(scene);
-        
+
         // Unregister from spawner
         PlayerSpawner.Instance?.UnregisterRemotePlayer(UmcPlayer);
-        
+
         // Untrack from camera
         CameraController.Instance?.UntrackEntity(this);
-        
+
         UmcLogger.Info($"Remote player {UmcPlayer.Name} removed from scene");
     }
 
