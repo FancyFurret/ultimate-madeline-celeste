@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Props;
+using Celeste.Mod.UltimateMadelineCeleste.Scoring;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Overlays;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
@@ -23,6 +24,13 @@ public class PartyBox : Entity
     private const float BoxSize = 132f;
     private const float SlotOffset = 27f;
     private const float SlideDistance = 250f;
+
+    // HUD rendering constants
+    private static float HudScale => ScoringConfig.HudScale;
+    private const float NativeWidth = 320f;
+    private const float NativeHeight = 180f;
+
+    private const float PropDisplayScale = 2f / 3f;
 
     // Shadow settings
     private const float PropShadowOffsetX = 2f;
@@ -69,7 +77,7 @@ public class PartyBox : Entity
     {
         Position = position;
         _props = props ?? new List<Prop>();
-        Tag = Tags.Global | Tags.PauseUpdate;
+        Tag = Tags.HUD | Tags.Global | Tags.PauseUpdate;
         Depth = BoxDepth;
 
         _propRenderTarget = VirtualContent.CreateRenderTarget("partybox-props", RenderTargetSize, RenderTargetSize);
@@ -142,8 +150,10 @@ public class PartyBox : Entity
             if (slot.IsTaken || slot.PropInstance.IsSpawned) continue;
 
             // Position at render target coordinates (centered at 128, 128)
+            // Scale positions UP by 1/PropDisplayScale so after render target is scaled down,
+            // props end up at the same visual positions (only smaller in size)
             var center = new Vector2(RenderTargetSize / 2f, RenderTargetSize / 2f);
-            var slotCenter = center + slot.LocalOffset * _zoomScale;
+            var slotCenter = center + slot.LocalOffset / PropDisplayScale;
             var topLeft = slotCenter - slot.Prop.GetCenter();
 
             slot.PropInstance.Spawn(_fakeLevel, topLeft);
@@ -207,8 +217,24 @@ public class PartyBox : Entity
 
         if (_fakeLevel != null)
         {
+            // Temporarily move real level's camera to (0,0) so CullHelper.IsVisible passes
+            // (entities like LavaRect check visibility in Update and skip if not visible)
+            var level = Scene as Level;
+            Vector2? savedCameraPos = null;
+            if (level?.Camera != null)
+            {
+                savedCameraPos = level.Camera.Position;
+                level.Camera.Position = Vector2.Zero;
+            }
+
             _fakeLevel.Entities.UpdateLists();
             _fakeLevel.Entities.Update();
+
+            // Restore camera position
+            if (savedCameraPos.HasValue && level?.Camera != null)
+            {
+                level.Camera.Position = savedCameraPos.Value;
+            }
         }
     }
 
@@ -280,14 +306,43 @@ public class PartyBox : Entity
         }
     }
 
+    /// <summary>Convert native coordinates to HUD coordinates.</summary>
+    private Vector2 ToHud(float x, float y) => new Vector2(x * HudScale, y * HudScale);
+
+    /// <summary>Starts SpriteBatch with PointClamp (does not end existing batch).</summary>
+    private void StartPointClamp()
+    {
+        Draw.SpriteBatch.Begin(
+            SpriteSortMode.Deferred,
+            BlendState.AlphaBlend,
+            SamplerState.PointClamp,
+            DepthStencilState.None,
+            RasterizerState.CullNone,
+            null,
+            Matrix.Identity
+        );
+    }
+
+    /// <summary>Switches to PointClamp for crisp pixel art textures (ends current batch first).</summary>
+    private void SwitchToPointClamp()
+    {
+        Draw.SpriteBatch.End();
+        StartPointClamp();
+    }
+
     public override void Render()
     {
         base.Render();
 
-        Vector2 renderPos = new(
-            (float)Math.Round(Position.X),
-            (float)Math.Round(Position.Y + (_shakeOffset + _slideOffset) * _zoomScale)
-        );
+        // Switch to PointClamp for crisp pixel art
+        SwitchToPointClamp();
+
+        // Center of screen in native coordinates, with shake/slide offset
+        float nativeX = NativeWidth / 2f;
+        float nativeY = NativeHeight / 2f + _shakeOffset + _slideOffset;
+
+        // Convert to HUD coordinates
+        Vector2 renderPos = ToHud(nativeX, nativeY);
 
         DrawBoxInside(renderPos);
 
@@ -313,12 +368,13 @@ public class PartyBox : Entity
     {
         base.DebugRender(camera);
 
-        Vector2 renderPos = new(
+        // Debug render in world coordinates for hit-testing visualization
+        Vector2 worldCenter = new(
             (float)Math.Round(Position.X),
             (float)Math.Round(Position.Y + (_shakeOffset + _slideOffset) * _zoomScale)
         );
 
-        DrawDebugPropSizes(renderPos);
+        DrawDebugPropSizes(worldCenter);
     }
 
     private void DrawDebugPropSizes(Vector2 boxPos)
@@ -327,21 +383,22 @@ public class PartyBox : Entity
         {
             if (slot.Prop == null) continue;
 
+            // Same as hit testing: positions at original offset, sizes scaled by PropDisplayScale
             var slotCenter = boxPos + slot.LocalOffset * _zoomScale;
-            var size = slot.Prop.GetSize();
+            var size = slot.Prop.GetSize() * PropDisplayScale * _zoomScale;
             var topLeft = slotCenter - size / 2f;
 
             Draw.HollowRect(topLeft.X, topLeft.Y, size.X, size.Y, Color.Lime * 0.8f);
 
-            float crossSize = 4f;
+            float crossSize = 4f * _zoomScale;
             Draw.Line(slotCenter - new Vector2(crossSize, 0), slotCenter + new Vector2(crossSize, 0), Color.Red);
             Draw.Line(slotCenter - new Vector2(0, crossSize), slotCenter + new Vector2(0, crossSize), Color.Red);
 
             ActiveFont.Draw(
                 slot.Prop.Name,
-                slotCenter + new Vector2(0, -size.Y / 2f - 8f),
+                slotCenter + new Vector2(0, -size.Y / 2f - 8f * _zoomScale),
                 new Vector2(0.5f, 1f),
-                Vector2.One * 0.3f,
+                Vector2.One * 0.3f * _zoomScale,
                 Color.White
             );
         }
@@ -351,13 +408,13 @@ public class PartyBox : Entity
     {
         if (_boxInside != null)
         {
-            _boxInside.DrawCentered(pos, Color.White, _zoomScale);
+            _boxInside.DrawCentered(pos, Color.White, HudScale);
         }
         else
         {
-            float size = BoxSize * _zoomScale;
+            float size = BoxSize * HudScale;
             Draw.Rect(pos.X - size / 2, pos.Y - size / 2, size, size, new Color(139, 90, 43));
-            float border = 4 * _zoomScale;
+            float border = 4 * HudScale;
             Draw.Rect(pos.X - size / 2 + border, pos.Y - size / 2 + border, size - border * 2, size - border * 2, new Color(101, 67, 33));
         }
     }
@@ -366,14 +423,14 @@ public class PartyBox : Entity
     {
         if (_lidLeftTop == null || _lidRightTop == null) return;
 
-        float halfBox = (BoxSize / 2f) * _zoomScale;
-        _lidLeftTop.Draw(pos + new Vector2(-halfBox, -halfBox), Vector2.Zero, Color.White, _zoomScale);
-        _lidRightTop.Draw(pos + new Vector2(0, -halfBox), Vector2.Zero, Color.White, _zoomScale);
+        float halfBox = (BoxSize / 2f) * HudScale;
+        _lidLeftTop.Draw(pos + new Vector2(-halfBox, -halfBox), Vector2.Zero, Color.White, HudScale);
+        _lidRightTop.Draw(pos + new Vector2(0, -halfBox), Vector2.Zero, Color.White, HudScale);
     }
 
     private void DrawOpeningLids(Vector2 pos, float progress)
     {
-        float halfBox = (BoxSize / 2f) * _zoomScale;
+        float halfBox = (BoxSize / 2f) * HudScale;
 
         if (progress < 0.5f)
         {
@@ -382,21 +439,21 @@ public class PartyBox : Entity
 
             if (scaleX > 0.01f && _lidLeftTop != null && _lidRightTop != null)
             {
-                _lidLeftTop.Draw(pos + new Vector2(-halfBox, -halfBox), Vector2.Zero, Color.White, new Vector2(scaleX * _zoomScale, _zoomScale));
-                _lidRightTop.Draw(pos + new Vector2(halfBox, -halfBox), new Vector2(_lidRightTop.Width, 0), Color.White, new Vector2(scaleX * _zoomScale, _zoomScale));
+                _lidLeftTop.Draw(pos + new Vector2(-halfBox, -halfBox), Vector2.Zero, Color.White, new Vector2(scaleX * HudScale, HudScale));
+                _lidRightTop.Draw(pos + new Vector2(halfBox, -halfBox), new Vector2(_lidRightTop.Width, 0), Color.White, new Vector2(scaleX * HudScale, HudScale));
             }
         }
         else
         {
             float bottomProgress = (progress - 0.5f) * 2f;
             float scaleX = bottomProgress;
-            float inset = 6f * _zoomScale;
-            float upOffset = 3f * _zoomScale;
+            float inset = 6f * HudScale;
+            float upOffset = 3f * HudScale;
 
             if (scaleX > 0.01f && _lidLeftBottom != null && _lidRightBottom != null)
             {
-                _lidLeftBottom.Draw(pos + new Vector2(-halfBox + inset, -halfBox - upOffset), new Vector2(_lidLeftBottom.Width, 0), Color.White, new Vector2(scaleX * _zoomScale, _zoomScale));
-                _lidRightBottom.Draw(pos + new Vector2(halfBox - inset, -halfBox - upOffset), Vector2.Zero, Color.White, new Vector2(scaleX * _zoomScale, _zoomScale));
+                _lidLeftBottom.Draw(pos + new Vector2(-halfBox + inset, -halfBox - upOffset), new Vector2(_lidLeftBottom.Width, 0), Color.White, new Vector2(scaleX * HudScale, HudScale));
+                _lidRightBottom.Draw(pos + new Vector2(halfBox - inset, -halfBox - upOffset), Vector2.Zero, Color.White, new Vector2(scaleX * HudScale, HudScale));
             }
         }
     }
@@ -410,22 +467,22 @@ public class PartyBox : Entity
         var engine = Engine.Instance;
         var previousRenderTarget = engine.GraphicsDevice.GetRenderTargets();
 
-        GameplayRenderer.End();
+        // End current HUD SpriteBatch
+        Draw.SpriteBatch.End();
 
         engine.GraphicsDevice.SetRenderTarget(_propRenderTarget);
         engine.GraphicsDevice.Clear(Color.Transparent);
 
-        // Temporarily move camera so CullHelper thinks our render target area is visible
+        // Temporarily move REAL level's camera to (0,0) so CullHelper.IsRectangleVisible works
+        // (CullHelper uses Engine.Scene.Camera, not the entity's scene camera)
         var savedCameraPos = level.Camera.Position;
         level.Camera.Position = Vector2.Zero;
 
-        Draw.SpriteBatch.Begin(
-            SpriteSortMode.Deferred,
-            BlendState.AlphaBlend,
-            SamplerState.PointClamp,
-            DepthStencilState.None,
-            RasterizerState.CullNone
-        );
+        // Position fake level's camera for proper matrix calculations
+        _fakeLevel.Camera.Position = Vector2.Zero;
+
+        // Start GameplayRenderer so entities like LavaRect that call GameplayRenderer.End/Begin work
+        GameplayRenderer.Begin();
 
         foreach (var entity in _fakeLevel.Entities)
         {
@@ -433,9 +490,9 @@ public class PartyBox : Entity
                 entity.Render();
         }
 
-        Draw.SpriteBatch.End();
+        GameplayRenderer.End();
 
-        // Restore camera position
+        // Restore real camera position
         level.Camera.Position = savedCameraPos;
 
         if (previousRenderTarget.Length > 0)
@@ -443,7 +500,8 @@ public class PartyBox : Entity
         else
             engine.GraphicsDevice.SetRenderTarget(null);
 
-        GameplayRenderer.Begin();
+        // Resume HUD SpriteBatch with PointClamp
+        StartPointClamp();
     }
 
     private void DrawPropsFromTarget(Vector2 boxPos)
@@ -451,7 +509,8 @@ public class PartyBox : Entity
         if (_propRenderTarget == null) return;
 
         var targetCenter = new Vector2(RenderTargetSize / 2f, RenderTargetSize / 2f);
-        var shadowOffset = new Vector2(PropShadowOffsetX, PropShadowOffsetY) * _zoomScale;
+        float scale = HudScale * PropDisplayScale;
+        var shadowOffset = new Vector2(PropShadowOffsetX, PropShadowOffsetY) * scale;
 
         // Draw shadow (offset, black tint)
         Draw.SpriteBatch.Draw(
@@ -461,7 +520,7 @@ public class PartyBox : Entity
             Color.Black * PropShadowAlpha,
             0f,
             targetCenter,
-            1f,
+            scale,
             SpriteEffects.None,
             0f
         );
@@ -474,7 +533,7 @@ public class PartyBox : Entity
             Color.White,
             0f,
             targetCenter,
-            1f,
+            scale,
             SpriteEffects.None,
             0f
         );
@@ -492,8 +551,11 @@ public class PartyBox : Entity
             var slot = _slots[i];
             if (slot.IsTaken || slot.Prop == null) continue;
 
+            // Position is screen center in world coordinates
+            // Slot positions are at original offsets (not scaled by PropDisplayScale)
+            // Prop sizes are scaled down by PropDisplayScale
             var slotCenter = Position + slot.LocalOffset * _zoomScale;
-            var size = slot.Prop.GetSize();
+            var size = slot.Prop.GetSize() * PropDisplayScale * _zoomScale;
             var topLeft = slotCenter - size / 2f;
 
             if (worldPos.X >= topLeft.X && worldPos.X <= topLeft.X + size.X &&

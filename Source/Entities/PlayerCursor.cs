@@ -99,7 +99,7 @@ public class PlayerCursor : Entity
             _input = new PlayerInput(player.Device);
 
         Tag = Tags.HUD | Tags.Global | Tags.PauseUpdate;
-        Depth = -20000;
+        Depth = -200000;
 
         // Set up networking
         _net = new NetworkedEntity<CursorPositionPayload>()
