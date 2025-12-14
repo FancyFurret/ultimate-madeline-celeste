@@ -506,9 +506,6 @@ public class PlatformingPhase
                     CameraController.Instance?.UntrackEntity(deadBody);
                     deadBody.Cleanup();
                     _customDeadBodies.Remove(deadBody);
-
-                    // Respawn the remote player
-                    spawner?.RespawnPlayer(level, player);
                 };
             }
         }
