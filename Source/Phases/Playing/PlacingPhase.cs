@@ -57,6 +57,7 @@ public class PlacingPhase
         NetworkManager.Handle<PropRotatedMessage>(HandlePropRotated);
         NetworkManager.Handle<PropFirstStageMessage>(HandlePropFirstStage);
         NetworkManager.Handle<PlacingCompleteMessage>(HandlePlacingComplete);
+        NetworkManager.Handle<PropsDestroyedMessage>(HandlePropsDestroyed);
 
         // Setup props for each player
         foreach (var kvp in playerSelections)
@@ -312,8 +313,31 @@ public class PlacingPhase
             UmcLogger.Info($"Player {player.Name} placed {propInstance.Prop.Name} at {targetTopLeft}");
         }
 
-        // Register prop ownership for trap kill tracking
-        RoundState.Current?.RegisterPlacedProp(propInstance, player);
+        // Notify the prop it was placed (for visual effects like bomb flash)
+        propInstance.Prop.OnPlaced(propInstance.Entity);
+
+        // Handle bomb explosion - host calculates and broadcasts destruction
+        if (IsHost && propInstance.Prop is BombProp bombProp && propInstance.Entity is PlacedBomb bomb)
+        {
+            // Host calculates which props to destroy
+            var destroyedIndices = BombProp.CalculateDestroyedPropIndices(bomb.Position, bomb.Size);
+
+            if (destroyedIndices.Count > 0)
+            {
+                // Broadcast destruction to all clients (including self)
+                NetworkManager.BroadcastWithSelf(new PropsDestroyedMessage
+                {
+                    PropIndices = destroyedIndices
+                });
+            }
+        }
+
+        // Register prop ownership for trap kill tracking (unless prop skips registration)
+        if (!propInstance.Prop.SkipRegistration)
+        {
+            UmcLogger.Info("REGISTERRRRRRRRRRRRRRRRRRRR");
+            RoundState.Current?.RegisterPlacedProp(propInstance, player);
+        }
 
         _placedPlayers.Add(player);
         _inSecondStage.Remove(player);
@@ -431,6 +455,30 @@ public class PlacingPhase
         OnComplete?.Invoke();
     }
 
+    private void HandlePropsDestroyed(PropsDestroyedMessage message)
+    {
+        var roundState = RoundState.Current;
+        if (roundState == null) return;
+
+        // Destroy props by index (in reverse order to maintain correct indices)
+        var sortedIndices = message.PropIndices.OrderByDescending(i => i).ToList();
+
+        foreach (var index in sortedIndices)
+        {
+            if (index < 0 || index >= roundState.PlacedProps.Count) continue;
+
+            var placedProp = roundState.PlacedProps[index];
+            UmcLogger.Info($"Bomb destroyed: {placedProp.Prop.Prop.Name} placed by {placedProp.Owner?.Name}");
+            placedProp.Prop.Despawn();
+            roundState.PlacedProps.RemoveAt(index);
+        }
+
+        if (message.PropIndices.Count > 0)
+        {
+            UmcLogger.Info($"Bomb explosion destroyed {message.PropIndices.Count} prop(s)");
+        }
+    }
+
     #endregion
 }
 
@@ -520,6 +568,30 @@ public class PlacingCompleteMessage : INetMessage
 {
     public void Serialize(BinaryWriter writer) { }
     public void Deserialize(BinaryReader reader) { }
+}
+
+public class PropsDestroyedMessage : INetMessage
+{
+    public List<int> PropIndices { get; set; } = new();
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write((byte)PropIndices.Count);
+        foreach (var index in PropIndices)
+        {
+            writer.Write((ushort)index);
+        }
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        int count = reader.ReadByte();
+        PropIndices = new List<int>(count);
+        for (int i = 0; i < count; i++)
+        {
+            PropIndices.Add(reader.ReadUInt16());
+        }
+    }
 }
 
 #endregion

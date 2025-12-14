@@ -81,6 +81,7 @@ public static class ScoringConfig
 
     /// <summary>Minimum players for solo bonus to apply.</summary>
     public static int SoloMinPlayers => RoundSettings.Current.SoloMinPlayers;
+    public static int FirstMinPlayers => RoundSettings.Current.FirstMinPlayers;
 
     /// <summary>Total number of rounds to play (0 = unlimited, play until points reached).</summary>
     public static int MaxRounds => RoundSettings.Current.MaxRounds;

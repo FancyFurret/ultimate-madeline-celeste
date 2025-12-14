@@ -85,6 +85,12 @@ public static class PropRegistry
 
     public static readonly IntroCarProp IntroCar = new();
 
+    // ============== BOMBS ==============
+
+    public static readonly BombProp Bomb1x1 = new("bomb_1x1", "Small Bomb", 8, "objects/UMC/bomb/bomb_1x1");
+    public static readonly BombProp Bomb3x3 = new("bomb_3x3", "Medium Bomb", 24, "objects/UMC/bomb/bomb_3x3");
+    public static readonly BombProp Bomb5x5 = new("bomb_5x5", "Large Bomb", 40, "objects/UMC/bomb/bomb_5x5");
+
     // ============== COLLECTIBLES ==============
 
     public static readonly BerryProp Berry = new();
@@ -174,6 +180,11 @@ public static class PropRegistry
 
         // Interactive objects
         Register(IntroCar);
+
+        // Bombs
+        Register(Bomb1x1);
+        Register(Bomb3x3);
+        Register(Bomb5x5);
 
         // Collectibles
         Register(Berry);

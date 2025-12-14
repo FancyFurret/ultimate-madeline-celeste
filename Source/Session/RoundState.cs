@@ -90,9 +90,6 @@ public class RoundState
             kvp.Value.ResetForNewRound(lives);
         }
 
-        // Clear placed props for new round
-        PlacedProps.Clear();
-
         HasEnded = false;
         HasStarted = true;
         UmcLogger.Info($"Starting round {RoundNumber}");

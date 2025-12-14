@@ -144,6 +144,7 @@ public class UmcModule : EverestModule
         messages.Register<PropRotatedMessage>();
         messages.Register<PropFirstStageMessage>();
         messages.Register<PlacingCompleteMessage>();
+        messages.Register<PropsDestroyedMessage>();
 
         // Platforming phase messages
         messages.Register<PlayerDeathSyncMessage>();

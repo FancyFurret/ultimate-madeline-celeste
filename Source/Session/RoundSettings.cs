@@ -216,7 +216,12 @@ public class RoundSettings
             new(PropRegistry.IntroCar, 0.2f),
 
             // ============== COLLECTIBLES ==============
-            new(PropRegistry.Berry, 1.0f)
+            new(PropRegistry.Berry, 1.0f),
+
+            // ============== BOMBS ==============
+            new(PropRegistry.Bomb1x1, 0.8f),
+            new(PropRegistry.Bomb3x3, 0.6f),
+            new(PropRegistry.Bomb5x5, 0.4f)
         }
     };
 

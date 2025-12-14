@@ -100,7 +100,10 @@ public enum PropCategory
     Special,
 
     /// <summary>Collectibles: berries.</summary>
-    Collectible
+    Collectible,
+
+    /// <summary>Bombs that destroy other props in their blast radius.</summary>
+    Bomb
 }
 
 /// <summary>
@@ -251,5 +254,17 @@ public abstract class Prop
     /// Override for entities that need custom target handling (e.g. ZipMover target).
     /// </summary>
     public virtual void OnTargetChanged(Entity entity, Vector2 newTarget) { }
+
+    /// <summary>
+    /// Called after the prop is placed (confirmed, not just previewing).
+    /// Override for props with special placement behavior (e.g. bombs that explode).
+    /// </summary>
+    public virtual void OnPlaced(Entity entity) { }
+
+    /// <summary>
+    /// If true, this prop should not be registered in RoundState.PlacedProps.
+    /// Use for props that destroy themselves after placement (e.g. bombs).
+    /// </summary>
+    public virtual bool SkipRegistration => false;
 }
 
