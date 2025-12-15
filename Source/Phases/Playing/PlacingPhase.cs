@@ -466,6 +466,9 @@ public class PlacingPhase
         _firstStagePositions[player] = position;
         _inSecondStage.Add(player);
 
+        var cursor = _cursors.GetFor(player);
+        cursor?.HelpText = propInstance.Prop.SecondStageLabel;
+
         UmcLogger.Info($"Remote player {player.Name} set first stage position at {position}");
     }
 
