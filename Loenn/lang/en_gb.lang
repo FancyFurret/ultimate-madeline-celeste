@@ -17,3 +17,17 @@ entities.UltimateMadelineCeleste/GoalFlag.tooltips.main=The goal flag that playe
 entities.UltimateMadelineCeleste/LivesBalancer.placements.name.normal=Lives Balancer
 entities.UltimateMadelineCeleste/LivesBalancer.tooltips.main=A sign where players can adjust their starting lives by jumping on -1, +1, or Reset buttons.
 
+entities.UltimateMadelineCeleste/CustomCollider.placements.name.normal=Custom Collider
+entities.UltimateMadelineCeleste/CustomCollider.tooltips.main=An invisible solid wall. The player will collide with it like a tile.
+
+# Effects / Stylegrounds
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.name=Rotating Backdrop
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.description=A backdrop that rotates a texture around a center point. Useful for rotating stars or other celestial backgrounds.
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.texture=Path to the texture relative to the Gameplay atlas (e.g. "bgs/UMC/stars").
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.centerX=X coordinate of the rotation center (default: 160, center of screen).
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.centerY=Y coordinate of the rotation center (default: 90, center of screen).
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.rotationSpeed=Rotation speed in degrees per second. Positive = clockwise.
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.scale=Scale of the texture (1 = original size).
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.opacity=Opacity of the texture (0 = invisible, 1 = fully opaque).
+style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.startRotation=Initial rotation in degrees.
+

@@ -330,15 +330,4 @@ public class SkinPedestal : Entity
             _hair.Facing = Facings.Right;
         }
     }
-
-    public override void Render()
-    {
-        if (!Visible) return;
-        
-        // Draw shadow under the character
-        Vector2 shadowPos = Position + new Vector2(0, 1);
-        Draw.Rect(shadowPos.X - 8, shadowPos.Y - 2, 16, 4, Color.Black * 0.3f);
-        
-        base.Render();
-    }
 }
