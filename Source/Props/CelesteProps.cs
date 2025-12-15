@@ -364,7 +364,7 @@ public class ZipMoverProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
-    public override PropCategory Category => PropCategory.Special;
+    public override PropCategory Category => PropCategory.Platform;
 
     public ZipMoverProp(string id, string name, int width, int height)
     {
@@ -401,7 +401,7 @@ public class SwapBlockProp : Prop
 
     public override string Id => _id;
     public override string Name => _name;
-    public override PropCategory Category => PropCategory.Special;
+    public override PropCategory Category => PropCategory.Platform;
 
     public SwapBlockProp(string id, string name, int width, int height)
     {
