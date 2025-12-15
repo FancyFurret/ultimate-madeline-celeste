@@ -147,6 +147,9 @@ public static class PauseMenuExtensions
         // Add Back to Lobby button if we're in a playing phase and are the host
         AddBackToLobbyButton(_currentMenu);
 
+        // Add Round Settings button for the host
+        AddRoundSettingsButton(_currentMenu);
+
         // Only show online options if we're in an online session
         if (NetworkManager.Instance?.IsOnline == true)
         {
@@ -184,6 +187,23 @@ public static class PauseMenuExtensions
             PlayingPhase.Instance?.ReturnToLobby();
         });
         menu.Add(backToLobbyButton);
+    }
+
+    private static void AddRoundSettingsButton(TextMenu menu)
+    {
+        // Only show for the host in the lobby (not during a round)
+        var session = GameSession.Instance;
+        var net = NetworkManager.Instance;
+        if (session == null || session.Phase != GamePhase.Lobby) return;
+        if (net != null && !net.IsHost) return;
+
+        var roundSettingsButton = new TextMenu.Button("Round Settings");
+        roundSettingsButton.Pressed(() =>
+        {
+            Audio.Play("event:/ui/main/button_select");
+            RoundSettingsMenu.Open(menu, () => { });
+        });
+        menu.Add(roundSettingsButton);
     }
 
     private static void ClearMenuItems(TextMenu menu)
