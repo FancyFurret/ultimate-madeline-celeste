@@ -34,6 +34,12 @@ public class PlayerCursor : Entity
     public Vector2 ScreenPosition => CoordinateUtils.WorldToScreen(Position);
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Optional help text to display below the cursor (e.g., "Select Start").
+    /// Set to null to hide the help text.
+    /// </summary>
+    public string HelpText { get; set; }
+
     private readonly Action<Vector2> _onConfirm;
     private readonly Action _onCancel;
 
@@ -237,6 +243,15 @@ public class PlayerCursor : Entity
 
         _cursorTexture.Draw(renderPos + new Vector2(-textureSize + 8, 8), Vector2.Zero, Color.Black * 0.5f, CursorScale);
         _cursorTexture.Draw(renderPos + new Vector2(-textureSize, 0), Vector2.Zero, CursorColor, CursorScale);
+
+        // Draw help text below cursor (cursor hangs above renderPos, so offset down from the texture bottom)
+        if (!string.IsNullOrEmpty(HelpText))
+        {
+            const float textScale = 0.5f;
+            var cursorHeight = _cursorTexture.Height * CursorScale;
+            var textPos = renderPos + new Vector2(-textureSize / 2f, cursorHeight + 4);
+            ActiveFont.DrawOutline(HelpText, textPos, new Vector2(0.5f, 0f), Vector2.One * textScale, Color.White, 2f, Color.Black);
+        }
     }
 }
 

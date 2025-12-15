@@ -184,11 +184,14 @@ public class PropInstance
         Prop.OnDespawn(Entity);
         Entity.RemoveSelf();
 
-        // Use target position if set (for two-stage props)
-        if (TargetPosition.HasValue)
-            Entity = Prop.Build(Position, TargetPosition.Value, Rotation, MirrorX, MirrorY);
+        if (IsTwoStage)
+        {
+            Entity = Prop.Build(Position, TargetPosition ?? Position, Rotation, MirrorX, MirrorY);
+        }
         else
+        {
             Entity = Prop.Build(Position, Rotation, MirrorX, MirrorY);
+        }
 
         scene.Add(Entity);
     }

@@ -156,6 +156,8 @@ public class RoundSettings
             // Spinners
             new(PropRegistry.DustSpinner, 1.0f),
             new(PropRegistry.CrystalSpinner, 1.0f),
+            new(PropRegistry.DustTrackSpinner, 1.0f),
+            new(PropRegistry.DustRotateSpinner, 1.0f),
 
             // Spikes
             new(PropRegistry.Spikes, 1.5f),

@@ -158,8 +158,7 @@ public class PartyBox : Entity
 
             slot.PropInstance.Spawn(_fakeLevel, topLeft);
 
-            if (slot.PropInstance.Entity != null)
-                slot.PropInstance.Entity.Visible = true;
+            slot.PropInstance.Entity?.Visible = true;
         }
 
         _fakeLevel.Entities.UpdateLists();

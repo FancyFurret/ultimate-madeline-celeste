@@ -91,6 +91,7 @@ public class PlacingPhase
         var topLeft = GetTopLeftFromCursor(snappedPos, propInstance);
 
         propInstance.Spawn(_level, topLeft);
+        propInstance.SetPosition(topLeft);
         _targetPositions[player] = topLeft;
 
         UmcLogger.Info($"Created preview for {player.Name}: {propInstance.Prop.Name}");
@@ -107,6 +108,14 @@ public class PlacingPhase
             {
                 SpawnPreview(player, propInstance);
                 _needsSpawn.Remove(player);
+
+                // Set initial help text for two-stage props
+                if (propInstance.IsTwoStage)
+                {
+                    var cursor = _cursors.GetFor(player);
+                    if (cursor != null)
+                        cursor.HelpText = propInstance.Prop.FirstStageLabel;
+                }
             }
         }
 
@@ -226,6 +235,11 @@ public class PlacingPhase
             propInstance.SetPosition(topLeft);
             _firstStagePositions[player] = topLeft;
             _inSecondStage.Add(player);
+
+            // Update cursor help text to second stage label
+            var cursor = _cursors.GetFor(player);
+            if (cursor != null)
+                cursor.HelpText = propInstance.Prop.SecondStageLabel;
 
             Audio.Play("event:/ui/main/button_toggle_on");
             UmcLogger.Info($"Player {player.Name} set start position for {propInstance.Prop.Name}, now selecting target");

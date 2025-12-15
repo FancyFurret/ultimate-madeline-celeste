@@ -41,6 +41,10 @@ public static class PropRegistry
     public static readonly KevinProp Kevin = new("kevin", "Kevin", 32, 32);
     public static readonly FireBarProp FireBar = new();
 
+    // Moving hazards (two-stage placement)
+    public static readonly DustTrackSpinnerProp DustTrackSpinner = new();
+    public static readonly DustRotateSpinnerProp DustRotateSpinner = new();
+
     // ============== DEADLY BLOCKS ==============
 
     // Lava blocks - squares
@@ -145,6 +149,10 @@ public static class PropRegistry
         Register(Puffer);
         Register(Kevin);
         Register(FireBar);
+
+        // Moving hazards
+        Register(DustTrackSpinner);
+        Register(DustRotateSpinner);
 
         // Deadly blocks - Lava
         Register(Lava2x2);

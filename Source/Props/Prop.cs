@@ -142,9 +142,15 @@ public abstract class Prop
 
     /// <summary>
     /// If true, this prop should be reset to its spawn position between rounds.
-    /// Override for props that can move during gameplay (e.g. Kevin, Puffer).
+    /// Override for props that can move during gameplay (e.g. Puffer).
     /// </summary>
     public virtual bool NeedsReset => false;
+
+    /// <summary>
+    /// If true, this prop should not be registered in RoundState.PlacedProps.
+    /// Use for props that destroy themselves after placement (e.g. bombs).
+    /// </summary>
+    public virtual bool SkipRegistration => false;
 
     /// <summary>
     /// The placement mode for this prop. Override to enable two-stage placement.
@@ -155,6 +161,18 @@ public abstract class Prop
     /// Whether this prop requires two-stage placement.
     /// </summary>
     public bool IsTwoStage => PlacementMode == PlacementMode.TwoStage;
+
+    /// <summary>
+    /// Label shown during first stage of two-stage placement.
+    /// Override to customize (e.g., "Select Center" for rotation-based props).
+    /// </summary>
+    public virtual string FirstStageLabel => "Select Start";
+
+    /// <summary>
+    /// Label shown during second stage of two-stage placement.
+    /// Override to customize (e.g., "Select Position" for rotation-based props).
+    /// </summary>
+    public virtual string SecondStageLabel => "Select End";
 
     /// <summary>
     /// Gets the size for the given rotation.
@@ -260,11 +278,5 @@ public abstract class Prop
     /// Override for props with special placement behavior (e.g. bombs that explode).
     /// </summary>
     public virtual void OnPlaced(Entity entity) { }
-
-    /// <summary>
-    /// If true, this prop should not be registered in RoundState.PlacedProps.
-    /// Use for props that destroy themselves after placement (e.g. bombs).
-    /// </summary>
-    public virtual bool SkipRegistration => false;
 }
 
