@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
@@ -89,7 +90,7 @@ public class BombProp : Prop
             if (placedProp.Entity == null) continue;
             if (placedProp.Entity.Scene == null) continue;
 
-            var propBounds = GetEntityBounds(placedProp.Entity);
+            var propBounds = GetPropBounds(placedProp);
 
             if (explosionBounds.Intersects(propBounds))
             {
@@ -101,43 +102,58 @@ public class BombProp : Prop
     }
 
     /// <summary>
-    /// Gets the bounding rectangle of an entity.
+    /// Gets the placed props that would be affected by a bomb at the given position.
+    /// Used for preview highlighting during placement.
     /// </summary>
-    public static Rectangle GetEntityBounds(Entity entity)
+    public static List<(PlacedProp prop, Rectangle bounds)> GetAffectedProps(Vector2 bombPosition, int explosionSize)
     {
-        if (entity.Collider != null)
+        var result = new List<(PlacedProp, Rectangle)>();
+        var roundState = RoundState.Current;
+        if (roundState == null) return result;
+
+        var explosionBounds = new Rectangle(
+            (int)bombPosition.X,
+            (int)bombPosition.Y,
+            explosionSize,
+            explosionSize
+        );
+
+        foreach (var placedProp in roundState.PlacedProps)
         {
-            return new Rectangle(
-                (int)(entity.Position.X + entity.Collider.Left),
-                (int)(entity.Position.Y + entity.Collider.Top),
-                (int)entity.Collider.Width,
-                (int)entity.Collider.Height
-            );
+            if (placedProp.Entity == null) continue;
+            if (placedProp.Entity.Scene == null) continue;
+
+            var propBounds = GetPropBounds(placedProp);
+
+            if (explosionBounds.Intersects(propBounds))
+            {
+                result.Add((placedProp, propBounds));
+            }
         }
 
-        var image = entity.Get<Image>();
-        if (image != null)
-        {
-            return new Rectangle(
-                (int)(entity.Position.X - image.Origin.X),
-                (int)(entity.Position.Y - image.Origin.Y),
-                (int)image.Width,
-                (int)image.Height
-            );
-        }
+        return result;
+    }
 
-        var sprite = entity.Get<Sprite>();
-        if (sprite != null)
-        {
-            return new Rectangle(
-                (int)(entity.Position.X - sprite.Origin.X),
-                (int)(entity.Position.Y - sprite.Origin.Y),
-                (int)sprite.Width,
-                (int)sprite.Height
-            );
-        }
+    /// <summary>
+    /// Gets the bounding rectangle of a placed prop using its sprite info.
+    /// The prop's GetSprite() provides accurate size and offset information.
+    /// </summary>
+    public static Rectangle GetPropBounds(PlacedProp placedProp)
+    {
+        var propInstance = placedProp.Prop;
+        var prop = propInstance.Prop;
+        var entity = placedProp.Entity;
 
-        return new Rectangle((int)entity.Position.X, (int)entity.Position.Y, 8, 8);
+        // Use the prop's sprite info for accurate bounds
+        var spriteInfo = prop.GetSprite(propInstance.Rotation);
+        var topLeft = entity.Position - spriteInfo.Offset;
+
+        return new Rectangle(
+            (int)topLeft.X,
+            (int)topLeft.Y,
+            (int)spriteInfo.Width,
+            (int)spriteInfo.Height
+        );
     }
 }
 
@@ -364,10 +380,29 @@ public class PlacedBomb : Entity
         Draw.Rect(Position.X, Position.Y, borderWidth, _size, borderColor);
         Draw.Rect(Position.X + _size - borderWidth, Position.Y, borderWidth, _size, borderColor);
 
+        // Render affected props with red highlight boxes
+        RenderAffectedProps(pulse);
+
         // Bomb texture centered (bobbing slightly)
         float bob = (float)Math.Sin(Scene?.TimeActive * 4f ?? 0f) * 2f;
         var center = Position + new Vector2(_size / 2f, _size / 2f + bob);
         _bombTexture.DrawCentered(center);
+    }
+
+    private void RenderAffectedProps(float pulse)
+    {
+        var affected = BombProp.GetAffectedProps(Position, _size);
+
+        foreach (var (prop, bounds) in affected)
+        {
+            // Semi-transparent red fill
+            var fillColor = new Color(255, 50, 50, (int)(80 * pulse));
+            Draw.Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height, fillColor);
+
+            // Red border (same style as bomb preview)
+            var borderColor = new Color(255, 0, 0, (int)(200 * pulse));
+            Draw.HollowRect(bounds.X, bounds.Y, bounds.Width, bounds.Height, borderColor);
+        }
     }
 
     private static void DrawCircle(Vector2 center, float radius, Color color, int segments)

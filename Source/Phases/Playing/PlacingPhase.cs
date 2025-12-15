@@ -50,6 +50,7 @@ public class PlacingPhase
 
         // Create the visual overlay (dark background + grid)
         _overlay = new PlacingOverlay();
+        _overlay.SetPlacingProps(_playerProps);
         level.Add(_overlay);
 
         // Register network handlers
@@ -93,6 +94,12 @@ public class PlacingPhase
         propInstance.Spawn(_level, topLeft);
         propInstance.SetPosition(topLeft);
         _targetPositions[player] = topLeft;
+
+        // Pause the prop if it needs pausing during placing
+        if (propInstance.Prop.PauseDuringPlacing && propInstance.Entity != null)
+        {
+            propInstance.Prop.SetPaused(propInstance.Entity, true);
+        }
 
         UmcLogger.Info($"Created preview for {player.Name}: {propInstance.Prop.Name}");
     }

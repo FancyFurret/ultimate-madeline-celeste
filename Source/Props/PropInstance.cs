@@ -132,8 +132,6 @@ public class PropInstance
     /// </summary>
     public void SetPosition(Vector2 topLeft)
     {
-        if (topLeft == Position) return;
-
         Position = topLeft;
 
         if (!IsSpawned) return;

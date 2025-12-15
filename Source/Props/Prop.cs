@@ -278,5 +278,25 @@ public abstract class Prop
     /// Override for props with special placement behavior (e.g. bombs that explode).
     /// </summary>
     public virtual void OnPlaced(Entity entity) { }
+
+    /// <summary>
+    /// If true, this prop should be paused during placing phase (e.g. moving spinners).
+    /// Override for props that move and should be frozen while placing.
+    /// </summary>
+    public virtual bool PauseDuringPlacing => false;
+
+    /// <summary>
+    /// Sets whether this prop's entity is paused.
+    /// Override for props that need custom pause handling (e.g. spinners with Moving field).
+    /// </summary>
+    public virtual void SetPaused(Entity entity, bool paused) { }
+
+    /// <summary>
+    /// Renders a preview/visualization for this prop during placing phase.
+    /// Override for props that need custom preview rendering (e.g. track/orbit lines for spinners).
+    /// </summary>
+    /// <param name="entity">The spawned entity.</param>
+    /// <param name="pulse">A pulsing value (0.4 to 1.0) for animation effects.</param>
+    public virtual void RenderPlacingPreview(Entity entity, float pulse) { }
 }
 

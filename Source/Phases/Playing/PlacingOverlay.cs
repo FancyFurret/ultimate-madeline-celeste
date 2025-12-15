@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
+using Celeste.Mod.UltimateMadelineCeleste.Players;
+using Celeste.Mod.UltimateMadelineCeleste.Props;
+using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Microsoft.Xna.Framework;
 using Monocle;
 
@@ -33,11 +37,22 @@ public class PlacingOverlay : Entity
     private Rectangle _levelBounds;
     private Level _level;
 
+    // Props currently being placed (not yet confirmed)
+    private Dictionary<UmcPlayer, PropInstance> _placingProps;
+
     public PlacingOverlay()
     {
         // Render behind most gameplay but above background
         Depth = 9500;
         Tag = Tags.Global | Tags.PauseUpdate;
+    }
+
+    /// <summary>
+    /// Sets the props currently being placed (for preview rendering).
+    /// </summary>
+    public void SetPlacingProps(Dictionary<UmcPlayer, PropInstance> placingProps)
+    {
+        _placingProps = placingProps;
     }
 
     public override void Added(Scene scene)
@@ -58,6 +73,30 @@ public class PlacingOverlay : Entity
         }
 
         _fadeProgress = 0f;
+
+        // Pause props that need pausing during placing
+        SetPropsPaused(true);
+    }
+
+    public override void Removed(Scene scene)
+    {
+        // Unpause props when overlay is removed
+        SetPropsPaused(false);
+        base.Removed(scene);
+    }
+
+    private void SetPropsPaused(bool paused)
+    {
+        var roundState = RoundState.Current;
+        if (roundState == null) return;
+
+        foreach (var placedProp in roundState.PlacedProps)
+        {
+            if (placedProp.Entity == null) continue;
+            if (!placedProp.Prop.Prop.PauseDuringPlacing) continue;
+
+            placedProp.Prop.Prop.SetPaused(placedProp.Entity, paused);
+        }
     }
 
     public override void Update()
@@ -117,6 +156,9 @@ public class PlacingOverlay : Entity
 
         // Draw blocked areas
         DrawBlockedAreas(ease);
+
+        // Draw prop previews (tracks, orbits, etc.)
+        DrawPropPreviews(ease);
     }
 
     private void DrawOverlay(Rectangle visibleArea, float ease)
@@ -243,6 +285,41 @@ public class PlacingOverlay : Entity
 
             // Border
             Draw.HollowRect(rect.X, rect.Y, rect.Width, rect.Height, BlockedLineColor * lineAlpha);
+        }
+    }
+
+    private void DrawPropPreviews(float ease)
+    {
+        // Calculate pulse for animations (0.4 to 1.0)
+        float pulse = 0.7f + (float)Math.Sin(_gridPulse * 3f) * 0.3f;
+        pulse *= ease;
+
+        // Render previews for already-placed props
+        var roundState = RoundState.Current;
+        if (roundState != null)
+        {
+            foreach (var placedProp in roundState.PlacedProps)
+            {
+                if (placedProp.Entity == null) continue;
+                if (placedProp.Entity.Scene == null) continue;
+
+                // Let each prop render its own preview
+                placedProp.Prop.Prop.RenderPlacingPreview(placedProp.Entity, pulse);
+            }
+        }
+
+        // Render previews for props currently being placed
+        if (_placingProps != null)
+        {
+            foreach (var kvp in _placingProps)
+            {
+                var propInstance = kvp.Value;
+                if (propInstance.Entity == null) continue;
+                if (propInstance.Entity.Scene == null) continue;
+
+                // Let each prop render its own preview
+                propInstance.Prop.RenderPlacingPreview(propInstance.Entity, pulse);
+            }
         }
     }
 }
