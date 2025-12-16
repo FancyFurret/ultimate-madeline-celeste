@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using Celeste.Mod.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
-using Celeste.Mod.UltimateMadelineCeleste.Session;
-using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
+using Celeste.Mod.UltimateMadelineCeleste.UI.Lobby;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -38,6 +37,16 @@ public class LevelButton : Entity
     /// Path to the preview texture (relative to Gameplay atlas).
     /// </summary>
     public string PreviewTexturePath { get; private set; }
+
+    /// <summary>
+    /// The text to display on the button.
+    /// </summary>
+    public string DisplayText { get; private set; }
+
+    /// <summary>
+    /// The color of the text.
+    /// </summary>
+    public Color TextColor { get; private set; }
 
     /// <summary>
     /// The preview texture displayed above the button.
@@ -95,6 +104,18 @@ public class LevelButton : Entity
     {
         MapSID = data.Attr("mapSID", "");
         PreviewTexturePath = data.Attr("previewTexture", "");
+        DisplayText = data.Attr("text", "");
+
+        // Parse text color (hex format, default to white)
+        string colorHex = data.Attr("textColor", "FFFFFF");
+        try
+        {
+            TextColor = Calc.HexToColor(colorHex);
+        }
+        catch
+        {
+            TextColor = Color.White;
+        }
 
         // Initialize button state (unpressed)
         _currentButtonOffset = ButtonUnpressedOffset;
@@ -409,8 +430,98 @@ public class LevelButton : Entity
             Draw.Rect(baseButtonPos.X, baseButtonPos.Y, ButtonWidth, ButtonBaseHeight, Color.Gray);
         }
 
-        // 4. Draw player arrows
+        // 4. Draw text (if specified)
+        if (!string.IsNullOrEmpty(DisplayText))
+        {
+            RenderText(basePos, previewWidth, previewHeight);
+        }
+
+        // 5. Draw player arrows
         RenderArrows(basePos);
+    }
+
+    /// <summary>
+    /// Renders the display text with newline support and shrink-to-fit using the pixel font.
+    /// </summary>
+    private void RenderText(Vector2 basePos, int availableWidth, int availableHeight)
+    {
+        if (string.IsNullOrEmpty(DisplayText)) return;
+
+        // Get the pixel font from the English dialog (same as speedrun timer, etc.)
+        var language = Dialog.Languages["english"];
+        var font = language.Font;
+        var fontSize = language.FontFaceSize;
+        var fontSizeData = font.Get(fontSize);
+        if (fontSizeData == null) return;
+
+        // Split text by newlines
+        string[] lines = DisplayText.Split('\n');
+        if (lines.Length == 0) return;
+
+        // Calculate available area (with padding)
+        float padding = 2f;
+        float maxWidth = availableWidth - padding * 2;
+        float maxHeight = availableHeight - padding * 2;
+
+        // Measure all lines to determine the scale needed
+        float maxLineWidth = 0f;
+        float totalHeight = 0f;
+        const float lineSpacing = 1.2f; // Line spacing multiplier
+
+        foreach (string line in lines)
+        {
+            if (string.IsNullOrEmpty(line)) continue;
+            Vector2 lineSize = fontSizeData.Measure(line);
+            maxLineWidth = Math.Max(maxLineWidth, lineSize.X);
+            totalHeight += lineSize.Y * lineSpacing;
+        }
+
+        // Calculate scale to fit both width and height
+        float scaleX = maxLineWidth > 0 ? Math.Min(1f, maxWidth / maxLineWidth) : 1f;
+        float scaleY = totalHeight > 0 ? Math.Min(1f, maxHeight / totalHeight) : 1f;
+        float scale = Math.Min(scaleX, scaleY);
+
+        // Recalculate total height with the actual scale
+        totalHeight = 0f;
+        foreach (string line in lines)
+        {
+            float lineHeight = string.IsNullOrEmpty(line)
+                ? fontSizeData.Measure(" ").Y * scale
+                : fontSizeData.Measure(line).Y * scale;
+            totalHeight += lineHeight * lineSpacing;
+        }
+
+        // Calculate starting position (top-aligned with padding)
+        float startX = basePos.X + EntityWidth / 2f;
+        float startY = basePos.Y + padding;
+
+        // Render each line
+        float currentY = startY;
+        foreach (string line in lines)
+        {
+            if (string.IsNullOrEmpty(line))
+            {
+                // Empty line - just advance Y position
+                float emptyHeight = fontSizeData.Measure(" ").Y * scale;
+                currentY += emptyHeight * lineSpacing;
+                continue;
+            }
+
+            Vector2 lineSize = fontSizeData.Measure(line) * scale;
+            Vector2 linePos = new Vector2(startX, currentY);
+
+            // Draw using pixel font
+            font.Draw(
+                fontSize,
+                line,
+                linePos,
+                new Vector2(0.5f, 0f), // Center horizontally, top-aligned vertically
+                Vector2.One * scale,
+                TextColor
+            );
+
+            currentY += lineSize.Y * lineSpacing;
+        }
     }
 
     /// <summary>
@@ -431,8 +542,8 @@ public class LevelButton : Entity
             var texture = _arrowTextures?[slot.TextureIndex];
 
             // Get player color
-            Color arrowColor = playerSlot < HubLobbyUi.PlayerColors.Length
-                ? HubLobbyUi.PlayerColors[playerSlot]
+            Color arrowColor = playerSlot < LobbyUi.PlayerColors.Length
+                ? LobbyUi.PlayerColors[playerSlot]
                 : Color.White;
 
             // Interpolate position from behind the preview (center) to final position

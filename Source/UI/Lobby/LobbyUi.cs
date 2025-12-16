@@ -1,16 +1,16 @@
-using Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
+using Celeste.Mod.UltimateMadelineCeleste.Phases.Lobby;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
 
-namespace Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
+namespace Celeste.Mod.UltimateMadelineCeleste.UI.Lobby;
 
 /// <summary>
 /// Renders the player slots HUD at the bottom of the screen.
 /// </summary>
-public class HubLobbyUi : Entity
+public class LobbyUi : Entity
 {
     public static readonly Color[] PlayerColors =
     [
@@ -26,7 +26,7 @@ public class HubLobbyUi : Entity
     private const float SlotHeight = 75f;
     private const float EdgePadding = 80f;
 
-    public HubLobbyUi()
+    public LobbyUi()
     {
         Tag = Tags.HUD | Tags.Global | Tags.PauseUpdate;
         Depth = -10000;
@@ -39,7 +39,7 @@ public class HubLobbyUi : Entity
         var session = GameSession.Instance;
         if (session == null) return;
 
-        var hubPhase = HubPhase.Instance;
+        var lobbyPhase = LobbyPhase.Instance;
 
         float availableWidth = ScreenWidth - EdgePadding * 2;
         float slotSpacing = (availableWidth - SlotWidth * PlayersController.MaxPlayers) / (PlayersController.MaxPlayers - 1);
@@ -56,10 +56,10 @@ public class HubLobbyUi : Entity
             if (player != null)
             {
                 // Show "Choose Character" if player is selecting OR if they're a local player without a skin
-                bool isSelecting = hubPhase?.IsPlayerSelecting(player) == true;
+                bool isSelecting = lobbyPhase?.IsPlayerSelecting(player) == true;
                 bool needsCharacterSelection = player.IsLocal && string.IsNullOrEmpty(player.SkinId);
 
-                var holdAction = hubPhase?.GetHoldAction(i);
+                var holdAction = lobbyPhase?.GetHoldAction(i);
                 if (holdAction?.ShowVisual == true)
                 {
                     RenderHoldIndicator(x, slotY, holdAction);

@@ -7,6 +7,8 @@ entities.UltimateMadelineCeleste/SkinPedestal.attributes.description.pedestalInd
 entities.UltimateMadelineCeleste/LevelButton.placements.name.normal=Level Button
 entities.UltimateMadelineCeleste/LevelButton.attributes.description.mapSID=The SID of the map this button leads to (e.g. "Celeste/1-ForsakenCity").
 entities.UltimateMadelineCeleste/LevelButton.attributes.description.previewTexture=Path to the level preview texture relative to the Gameplay atlas (e.g. "bgs/UMC/waterfall_preview").
+entities.UltimateMadelineCeleste/LevelButton.attributes.description.text=Text to display on the button. Use \n for newlines. The text will automatically shrink to fit the available space.
+entities.UltimateMadelineCeleste/LevelButton.attributes.description.textColor=Hex color code for the text (e.g. "FFFFFF" for white, "FF0000" for red, "00FF00" for green). Defaults to white if invalid.
 
 triggers.UltimateMadelineCeleste/PlacementBlocker.placements.name.normal=Placement Blocker
 triggers.UltimateMadelineCeleste/PlacementBlocker.tooltips.main=A zone that prevents players from placing props during the placing phase. Use around spawn areas.
@@ -20,6 +22,9 @@ entities.UltimateMadelineCeleste/LivesBalancer.tooltips.main=A sign where player
 entities.UltimateMadelineCeleste/CustomCollider.placements.name.normal=Custom Collider
 entities.UltimateMadelineCeleste/CustomCollider.tooltips.main=An invisible solid wall. The player will collide with it like a tile.
 
+entities.UltimateMadelineCeleste/DeathPlane.placements.name.normal=Death Plane
+entities.UltimateMadelineCeleste/DeathPlane.tooltips.main=An invisible death zone. The player will die when touching it.
+
 # Effects / Stylegrounds
 style.effects.UltimateMadelineCeleste/RotatingBackdrop.name=Rotating Backdrop
 style.effects.UltimateMadelineCeleste/RotatingBackdrop.description=A backdrop that rotates a texture around a center point. Useful for rotating stars or other celestial backgrounds.
@@ -31,3 +36,12 @@ style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.sca
 style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.opacity=Opacity of the texture (0 = invisible, 1 = fully opaque).
 style.effects.UltimateMadelineCeleste/RotatingBackdrop.attribute.description.startRotation=Initial rotation in degrees.
 
+style.effects.UltimateMadelineCeleste/GradientBackdrop.name=Gradient Backdrop
+style.effects.UltimateMadelineCeleste/GradientBackdrop.description=A color that fades to transparent in world space. Spans full width/height perpendicular to the direction.
+style.effects.UltimateMadelineCeleste/GradientBackdrop.attribute.description.texture=Path to the gradient texture (transparent->white). Default: bgs/UMC/gradient.
+style.effects.UltimateMadelineCeleste/GradientBackdrop.attribute.description.startPos=World position where the color starts (color is here).
+style.effects.UltimateMadelineCeleste/GradientBackdrop.attribute.description.endPos=World position where the gradient ends (transparent is here).
+style.effects.UltimateMadelineCeleste/GradientBackdrop.attribute.description.direction=Axis of the gradient: Vertical (Y axis) or Horizontal (X axis).
+style.effects.UltimateMadelineCeleste/GradientBackdrop.attribute.description.colorHex=The color of the gradient (hex format, e.g. "000000" for black).
+style.effects.UltimateMadelineCeleste/GradientBackdrop.attribute.description.colorOpacity=Opacity of the color (0 = invisible, 1 = fully opaque).
+style.effects.UltimateMadelineCeleste/GradientBackdrop.attribute.description.middleMode=When enabled, the gradient mirrors at the midpoint.

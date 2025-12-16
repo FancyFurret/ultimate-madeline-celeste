@@ -7,7 +7,6 @@ using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Props;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
-using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;

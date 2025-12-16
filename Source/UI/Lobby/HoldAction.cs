@@ -1,10 +1,8 @@
 using System;
-using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
-using Microsoft.Xna.Framework.Input;
 using Monocle;
 
-namespace Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
+namespace Celeste.Mod.UltimateMadelineCeleste.UI.Lobby;
 
 public enum HoldActionType
 {

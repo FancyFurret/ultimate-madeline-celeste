@@ -11,7 +11,7 @@ using Microsoft.Xna.Framework;
 using Monocle;
 using Steamworks;
 
-namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
+namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Lobby;
 
 /// <summary>
 /// Handles character selection: cursor management, pedestal interaction, and skin selection.
@@ -20,7 +20,7 @@ public class CharacterSelection
 {
     private const float SelectionRadius = 40f;
 
-    private readonly HubPhase _hub;
+    private readonly LobbyPhase _lobby;
     private PlayerCursors _cursors;
     private readonly HashSet<UmcPlayer> _selectingPlayers = new();
     private readonly Dictionary<UmcPlayer, SkinPedestal> _hoveredPedestals = new();
@@ -31,9 +31,9 @@ public class CharacterSelection
     public bool IsPlayerSelecting(UmcPlayer player) => _selectingPlayers.Contains(player);
     public Vector2? GetSpawnPosition(UmcPlayer player) => _spawnPositions.TryGetValue(player, out var pos) ? pos : null;
 
-    public CharacterSelection(HubPhase hub, Scene scene)
+    public CharacterSelection(LobbyPhase lobby, Scene scene)
     {
-        _hub = hub;
+        _lobby = lobby;
         _cursors = new PlayerCursors(
             scene,
             onConfirm: (player, _) => OnCursorConfirm(player),
@@ -122,7 +122,7 @@ public class CharacterSelection
         // Track pedestals when first player starts selecting
         if (wasEmpty)
         {
-            foreach (var pedestal in _hub.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
+            foreach (var pedestal in _lobby.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
             {
                 if (pedestal.Active && pedestal.Visible)
                     CameraController.Instance?.TrackEntity(pedestal);
@@ -213,7 +213,7 @@ public class CharacterSelection
 
     private void EnsureAvailablePedestal()
     {
-        var pedestals = _hub.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>().ToList();
+        var pedestals = _lobby.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>().ToList();
         if (pedestals.Any(p => p.Active && p.Visible)) return;
 
         var defaultPedestal = pedestals.FirstOrDefault(p => p.SkinName == SkinsSystem.DEFAULT);
@@ -258,7 +258,7 @@ public class CharacterSelection
             if (spawner.GetLocalPlayer(player) == null)
             {
                 var spawnPos = GetSpawnPosition(player);
-                spawner.SpawnLocalPlayer(_hub.Scene as Level, player, spawnPos);
+                spawner.SpawnLocalPlayer(_lobby.Scene as Level, player, spawnPos);
             }
         }
         // Remote players spawn via NetworkedEntity factory when they select a skin
@@ -291,7 +291,7 @@ public class CharacterSelection
 
     private SkinPedestal FindAndClaimPedestalBySkin(string skinName)
     {
-        foreach (var pedestal in _hub.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
+        foreach (var pedestal in _lobby.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
         {
             if (pedestal.SkinName == skinName && pedestal.Active && pedestal.Visible)
             {
@@ -309,7 +309,7 @@ public class CharacterSelection
 
     private void ReleasePedestalBySkin(string skinName)
     {
-        foreach (var pedestal in _hub.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
+        foreach (var pedestal in _lobby.Scene.Tracker.GetEntities<SkinPedestal>().Cast<SkinPedestal>())
         {
             if (pedestal.SkinName == skinName && !pedestal.Active)
             {

@@ -218,7 +218,6 @@ public class PlacingOverlay : Entity
             );
         }
 
-        // Draw level bounds outline with glow effect
         DrawLevelBoundsGlow(ease);
     }
 

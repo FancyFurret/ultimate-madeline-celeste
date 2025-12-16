@@ -1,5 +1,5 @@
 using Celeste.Mod.UltimateMadelineCeleste.Network;
-using Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
+using Celeste.Mod.UltimateMadelineCeleste.Phases.Lobby;
 using Celeste.Mod.UltimateMadelineCeleste.Phases.Playing;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
@@ -16,7 +16,6 @@ public class PhaseManager
 
     public GamePhase Phase { get; private set; } = GamePhase.Lobby;
 
-    private const string HubStageId = "FancyFurret/UltimateMadelineCeleste/Hub";
 
     public string PendingLevelSID { get; set; }
 
@@ -39,7 +38,7 @@ public class PhaseManager
     {
         var sid = level.Session.Area.SID;
         var isUmcLevel = sid.Contains("UltimateMadelineCeleste");
-        var isHub = sid == HubStageId;
+        var isLobby = sid == UmcModule.LobbyStageId;
 
         // Not a UMC level - skip our logic
         if (!isUmcLevel)
@@ -62,11 +61,11 @@ public class PhaseManager
         }
 
         // Determine which phase we should be in based on level and session state
-        if (isHub)
+        if (isLobby)
         {
-            // Entering hub - call orig first, then add phase entity
+            // Entering lobby - call orig first, then add phase entity
             orig(level, playerIntro, isFromLoader);
-            EnsurePhaseEntity<HubPhase>(level, GamePhase.Lobby);
+            EnsurePhaseEntity<LobbyPhase>(level, GamePhase.Lobby);
         }
         else if (session.Phase == GamePhase.Playing)
         {
@@ -79,8 +78,8 @@ public class PhaseManager
         }
         else
         {
-            // Loading a non-hub UMC level but not in Playing phase - redirect to hub
-            UmcLogger.Info($"Entered UMC level '{sid}' outside Playing phase - redirecting to hub");
+            // Loading a non-lobby UMC level but not in Playing phase - redirect to lobby
+            UmcLogger.Info($"Entered UMC level '{sid}' outside Playing phase - redirecting to lobby");
             Phase = GamePhase.Lobby;
 
             // Still call orig to let the level load (avoids crashes), redirect happens after
@@ -89,7 +88,7 @@ public class PhaseManager
             // Schedule redirect after this frame completes
             level.OnEndOfFrame += () =>
             {
-                LevelEnter.Go(new global::Celeste.Session(AreaData.Get(HubStageId).ToKey()), false);
+                LevelEnter.Go(new global::Celeste.Session(AreaData.Get(UmcModule.LobbyStageId).ToKey()), false);
             };
         }
     }
@@ -102,7 +101,7 @@ public class PhaseManager
 
         Entity phase = typeof(T) switch
         {
-            var t when t == typeof(HubPhase) => new HubPhase(),
+            var t when t == typeof(LobbyPhase) => new LobbyPhase(),
             var t when t == typeof(PlayingPhase) => new PlayingPhase(levelSid ?? level.Session.Area.SID),
             _ => null
         };
@@ -140,7 +139,7 @@ public class PhaseManager
     }
 
     /// <summary>
-    /// Transitions back to the hub with the Lobby phase.
+    /// Transitions back to the lobby with the Lobby phase.
     /// </summary>
     public void TransitionToLobby()
     {
@@ -150,7 +149,7 @@ public class PhaseManager
         {
             level.OnEndOfFrame += () =>
             {
-                LevelEnter.Go(new global::Celeste.Session(AreaData.Get(HubStageId).ToKey()), false);
+                LevelEnter.Go(new global::Celeste.Session(AreaData.Get(UmcModule.LobbyStageId).ToKey()), false);
             };
         }
     }

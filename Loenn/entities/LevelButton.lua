@@ -9,7 +9,9 @@ levelButton.placements = {
         name = "normal",
         data = {
             mapSID = "",
-            previewTexture = ""
+            previewTexture = "",
+            text = "",
+            textColor = "FFFFFF"
         }
     }
 }
@@ -21,6 +23,12 @@ levelButton.fieldInformation = {
     },
     previewTexture = {
         fieldType = "string"
+    },
+    text = {
+        fieldType = "string",
+    },
+    textColor = {
+        fieldType = "string",
     }
 }
 

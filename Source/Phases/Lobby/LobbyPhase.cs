@@ -1,23 +1,21 @@
 using System.Collections.Generic;
 using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
-using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
-using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
+using Celeste.Mod.UltimateMadelineCeleste.UI.Lobby;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Overlays;
-using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
 
-namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
+namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Lobby;
 
 /// <summary>
-/// Main hub phase controller. Handles player join/leave and delegates to CharacterSelection.
+/// Main lobby phase controller. Handles player join/leave and delegates to CharacterSelection.
 /// </summary>
-public class HubPhase : Entity
+public class LobbyPhase : Entity
 {
-    public static HubPhase Instance { get; private set; }
+    public static LobbyPhase Instance { get; private set; }
 
     private readonly Dictionary<int, HoldAction> _activeHoldActions = new();
     private CharacterSelection _characterSelection;
@@ -38,7 +36,7 @@ public class HubPhase : Entity
     /// </summary>
     public HoldAction GetHoldAction(int slotIndex) => _activeHoldActions.GetValueOrDefault(slotIndex);
 
-    public HubPhase()
+    public LobbyPhase()
     {
         Instance = this;
         Tag = Tags.Global | Tags.PauseUpdate;
@@ -53,7 +51,7 @@ public class HubPhase : Entity
         _characterSelection = new CharacterSelection(this, scene);
         _levelSelection = new LevelSelection(this, GameSession.Instance?.Players);
 
-        scene.Add(new HubLobbyUi());
+        scene.Add(new LobbyUi());
         scene.Add(new ConnectingOverlay());
 
         var lobby = LobbyController.Instance;

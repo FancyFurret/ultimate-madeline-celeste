@@ -173,7 +173,7 @@ public class SaveSlotMenu : HookedFeature<SaveSlotMenu>
         if (_currentSlot != null)
             SaveData.Start(_currentSlot.SaveData, _currentSlot.FileSlot);
 
-        var areaData = AreaData.Get("FancyFurret/UltimateMadelineCeleste/Hub");
+        var areaData = AreaData.Get("UltimateMadelineCeleste/lobby");
         LevelEnter.Go(new global::Celeste.Session(new AreaKey(areaData.ID)), false);
     }
 }

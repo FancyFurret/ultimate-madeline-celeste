@@ -4,7 +4,7 @@ using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
-using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
+using Celeste.Mod.UltimateMadelineCeleste.UI.Lobby;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -98,7 +98,7 @@ public class PlayerCursor : Entity
         Player = player;
         _onConfirm = onConfirm;
         _onCancel = onCancel;
-        CursorColor = HubLobbyUi.PlayerColors[player.SlotIndex % HubLobbyUi.PlayerColors.Length];
+        CursorColor = LobbyUi.PlayerColors[player.SlotIndex % LobbyUi.PlayerColors.Length];
         _cursorTexture ??= GFX.Gui["umc/cursor"];
 
         if (!isRemote && player.Device != null)

@@ -15,8 +15,6 @@ namespace Celeste.Mod.UltimateMadelineCeleste.Players;
 /// </summary>
 public class PlayerSpawner : HookedFeature<PlayerSpawner>
 {
-    private const string HubStageId = "FancyFurret/UltimateMadelineCeleste/Hub";
-
     private readonly Dictionary<UmcPlayer, Player> _localPlayers = new();
     private readonly Dictionary<UmcPlayer, RemotePlayer> _remotePlayers = new();
 

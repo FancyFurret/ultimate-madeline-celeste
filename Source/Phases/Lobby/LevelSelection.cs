@@ -1,10 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Entities;
 using Celeste.Mod.UltimateMadelineCeleste.Network;
 using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
-using Celeste.Mod.UltimateMadelineCeleste.Phases.Playing;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
@@ -12,7 +10,7 @@ using Microsoft.Xna.Framework;
 using Monocle;
 using Steamworks;
 
-namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Hub;
+namespace Celeste.Mod.UltimateMadelineCeleste.Phases.Lobby;
 
 /// <summary>
 /// Handles level selection: tracking players on buttons and countdown to level start.
@@ -24,7 +22,7 @@ public class LevelSelection
     private const float ArrowEliminationInterval = 1f;
     private const float CameraZoomDuration = 1.5f;
 
-    private readonly HubPhase _hub;
+    private readonly LobbyPhase _lobby;
     private PlayersController _players;
 
     private LevelVotingCountdown _countdownUI;
@@ -48,9 +46,9 @@ public class LevelSelection
 
     private bool IsHost => NetworkManager.Instance?.IsHost ?? true;
 
-    public LevelSelection(HubPhase hub, PlayersController players)
+    public LevelSelection(LobbyPhase lobby, PlayersController players)
     {
-        _hub = hub;
+        _lobby = lobby;
         _players = players;
         
         NetworkManager.Handle<LevelVoteStateMessage>(HandleVoteState);
@@ -74,7 +72,7 @@ public class LevelSelection
                     if (_countdownUI == null)
                     {
                         _countdownUI = new LevelVotingCountdown();
-                        _hub.Scene.Add(_countdownUI);
+                        _lobby.Scene.Add(_countdownUI);
                     }
                     _countdownUI.Show(message.CountdownNumber);
                 }
@@ -92,8 +90,8 @@ public class LevelSelection
                 // Freeze inputs on client too
                 if (PlayerSpawner.Instance != null)
                     PlayerSpawner.Instance.InputsFrozen = true;
-                if (HubPhase.Instance != null)
-                    HubPhase.Instance.IsLevelTransitioning = true;
+                if (LobbyPhase.Instance != null)
+                    LobbyPhase.Instance.IsLevelTransitioning = true;
                 break;
 
             case LevelVotePhase.Eliminating:
@@ -132,7 +130,7 @@ public class LevelSelection
         // Only clients handle this
         if (IsHost) return;
 
-        if (_hub.Scene is Level level)
+        if (_lobby.Scene is Level level)
         {
             // Find the button with this player's arrow and hide it
             var levelButtons = level.Tracker.GetEntities<LevelButton>().Cast<LevelButton>().ToList();
@@ -290,7 +288,7 @@ public class LevelSelection
         if (_countdownUI == null)
         {
             _countdownUI = new LevelVotingCountdown();
-            _hub.Scene.Add(_countdownUI);
+            _lobby.Scene.Add(_countdownUI);
         }
 
         int startNumber = (int)System.Math.Ceiling(_countdownTimer);
@@ -373,9 +371,7 @@ public class LevelSelection
         if (PlayerSpawner.Instance != null)
             PlayerSpawner.Instance.InputsFrozen = true;
 
-        var hubPhase = HubPhase.Instance;
-        if (hubPhase != null)
-            hubPhase.IsLevelTransitioning = true;
+        LobbyPhase.Instance?.IsLevelTransitioning = true;
 
         _countdownActive = false;
         _showingGo = true;

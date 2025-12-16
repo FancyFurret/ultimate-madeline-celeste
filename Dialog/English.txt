@@ -1,1 +1,1 @@
-﻿FancyFurret_UltimateMadelineCeleste_Hub=UMC Lobby
+﻿UltimateMadelineCeleste_lobby=UMC Lobby

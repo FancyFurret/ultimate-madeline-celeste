@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
 using Celeste.Mod.UltimateMadelineCeleste.Session;
-using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 using Microsoft.Xna.Framework;
 using Monocle;

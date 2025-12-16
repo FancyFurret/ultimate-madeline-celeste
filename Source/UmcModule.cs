@@ -8,10 +8,8 @@ using Celeste.Mod.UltimateMadelineCeleste.Network.Messages;
 using Celeste.Mod.UltimateMadelineCeleste.Phases;
 using Celeste.Mod.UltimateMadelineCeleste.Phases.Playing;
 using Celeste.Mod.UltimateMadelineCeleste.Players;
-using Celeste.Mod.UltimateMadelineCeleste.UI.Hub;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Menu;
 using Celeste.Mod.UltimateMadelineCeleste.UI.Overlays;
-using Celeste.Pico8;
 using Monocle;
 using Celeste.Mod.UltimateMadelineCeleste.Utilities;
 
@@ -19,15 +17,11 @@ namespace Celeste.Mod.UltimateMadelineCeleste;
 
 public class UmcModule : EverestModule
 {
-    public const BindingFlags AllFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-
     public static UmcModule Instance { get; private set; }
     public override Type SettingsType => typeof(UmcSettings);
     public static UmcSettings Settings => (UmcSettings)Instance._Settings;
-
-    public bool InLevel => Engine.Scene is Level || Engine.Scene is LevelLoader || Engine.Scene is LevelExit || Engine.Scene is Emulator;
-
-    public List<Action<bool>> EnabledActions { get; } = new();
+    
+    public const string LobbyStageId = "UltimateMadelineCeleste/lobby";
 
     private SaveSlotMenu SaveSlotMenu { get; } = new();
     private UmcInputHandler InputHandler { get; } = new();
@@ -93,10 +87,8 @@ public class UmcModule : EverestModule
         if (firstLoad)
         {
             Scoreboard.LoadTextures();
+            GrayscaleEffect.Load();
         }
-
-        UmcLogger.Info("Loading grayscale effect");
-        Utilities.GrayscaleEffect.Load();
     }
 
     public void ApplySettings() { }
@@ -124,7 +116,7 @@ public class UmcModule : EverestModule
         messages.Register<RequestLobbyStateMessage>();
         messages.Register<PlayerEventMessage>();
 
-        // Hub phase messages
+        // Lobby phase messages
         messages.Register<UpdateSkinMessage>();
         messages.Register<LevelVoteStateMessage>();
         messages.Register<LevelVoteEliminateMessage>();

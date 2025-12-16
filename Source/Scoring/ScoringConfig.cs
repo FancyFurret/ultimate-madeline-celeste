@@ -83,9 +83,6 @@ public static class ScoringConfig
     public static int SoloMinPlayers => RoundSettings.Current.SoloMinPlayers;
     public static int FirstMinPlayers => RoundSettings.Current.FirstMinPlayers;
 
-    /// <summary>Total number of rounds to play (0 = unlimited, play until points reached).</summary>
-    public static int MaxRounds => RoundSettings.Current.MaxRounds;
-
     // ============== UI COLORS ==============
 
     /// <summary>Color for the grid lines, numbers, and text.</summary>
@@ -93,17 +90,6 @@ public static class ScoringConfig
 
     /// <summary>Color for the banner.</summary>
     public static Color BannerColor = Calc.HexToColor("ee6e6b") * 0.85f;
-
-    // ============== PLAYER COLORS ==============
-
-    /// <summary>Colors for each player slot (matches HubLobbyUi).</summary>
-    public static readonly Color[] PlayerColors =
-    [
-        Calc.HexToColor("E84646"), // Red
-        Calc.HexToColor("F5A623"), // Orange  
-        Calc.HexToColor("4A90D9"), // Blue
-        Calc.HexToColor("7ED321")  // Green
-    ];
 
     // ============== ANIMATION DURATIONS (in seconds) ==============
 
@@ -163,33 +149,17 @@ public static class ScoringConfig
     /// <summary>Width reserved for player name/avatar.</summary>
     public static float PlayerLabelWidth = 50f;
 
-    /// <summary>Width of the score bar texture.</summary>
-    public static float BarWidth = 45f;
-
-
     /// <summary>Maximum width of the score bar area (for 5 points).</summary>
     public static float BarAreaWidth = 170f;
 
     /// <summary>Padding inside the card.</summary>
     public static float CardPadding = 8f;
 
-    /// <summary>Height of the bottom axis area (for numbers).</summary>
-    public static float AxisHeight = 14f;
-
-    /// <summary>Width of the banner texture.</summary>
-    public static float BannerWidth = 175f;
-
-    /// <summary>Height of the banner texture.</summary>
-    public static float BannerHeight = 76f;
-
     /// <summary>Rotation angle for banner sprite (in radians).</summary>
     public static float BannerRotation = -0.15f;
 
     /// <summary>Rotation angle for special message text (in radians).</summary>
     public static float SpecialMessageTextRotation = -0.45f;
-
-    /// <summary>Scale for special message text.</summary>
-    public static float SpecialMessageTextScale = 1.8f;
 
     // ============== SPECIAL MESSAGE LABELS ==============
 
